@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StadiumPulse — Smart Stadium &amp; Tournament Operations</title>
+<meta name="description" content="Real-time stadium operations control room: crowd density, security alerts, ticketing and tournament scheduling, and accessibility tools.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg-primary:#0B1220;
+    --bg-panel:#121B2E;
+    --bg-panel-raised:#182644;
+    --line:#243352;
+    --text-primary:#F5F7FA;
+    --text-secondary:#8B96A8;
+    --accent-live:#2E7D5B;
+    --accent-live-soft:rgba(46,125,91,.18);
+    --accent-warn:#E8A33D;
+    --accent-warn-soft:rgba(232,163,61,.18);
+    --accent-critical:#D64545;
+    --accent-critical-soft:rgba(214,69,69,.18);
+    --accent-info:#3E8FB0;
+    --accent-info-soft:rgba(62,143,176,.18);
+    --radius:10px;
+    --font-scale:1;
+    font-size:calc(16px * var(--font-scale));
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg-primary);
+    color:var(--text-primary);
+    font-family:'Inter',system-ui,sans-serif;
+    line-height:1.5;
+    min-height:100vh;
+  }
+  body.high-contrast{
+    --bg-primary:#000000;
+    --bg-panel:#000000;
+    --bg-panel-raised:#0d0d0d;
+    --line:#ffffff;
+    --text-primary:#ffffff;
+    --text-secondary:#e6e6e6;
+    --accent-live:#3DDC97;
+    --accent-warn:#FFC24B;
+    --accent-critical:#FF5C5C;
+    --accent-info:#6FD3FF;
+  }
+  body.high-contrast .panel, body.high-contrast .topbar, body.high-contrast .toolbar{
+    border-width:2px;
+  }
+  h1,h2,h3{font-family:'Oswald',sans-serif;letter-spacing:.02em;margin:0;}
+  .mono{font-family:'JetBrains Mono',monospace;}
+  a{color:var(--accent-info);}
+  button{font-family:inherit;cursor:pointer;}
+  button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible, [tabindex]:focus-visible{
+    outline:3px solid var(--accent-info);
+    outline-offset:2px;
+  }
+  @media (prefers-reduced-motion: reduce){
+    *{animation-duration:.001ms !important; animation-iteration-count:1 !important; transition-duration:.001ms !important;}
+  }
+  .skip-link{
+    position:absolute; left:-999px; top:0; background:var(--accent-info); color:#03131a;
+    padding:.6rem 1rem; z-index:100; border-radius:0 0 6px 0; font-weight:600;
+  }
+  .skip-link:focus{left:0;}
+
+  .topbar{
+    display:flex; align-items:center; justify-content:space-between; gap:1rem;
+    padding:.9rem 1.5rem; background:var(--bg-panel); border-bottom:1px solid var(--line);
+    position:sticky; top:0; z-index:20; flex-wrap:wrap;
+  }
+  .brand{display:flex; align-items:center; gap:.7rem;}
+  .brand-mark{
+    width:34px;height:34px;border-radius:8px;
+    background:conic-gradient(from 45deg, var(--accent-live), var(--accent-info), var(--accent-warn), var(--accent-live));
+    display:flex; align-items:center; justify-content:center; font-family:'Oswald'; font-weight:700; font-size:.85rem; color:#04121a;
+  }
+  .brand h1{font-size:1.15rem;}
+  .brand p{margin:0; font-size:.72rem; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.12em;}
+  .status-cluster{display:flex; align-items:center; gap:1rem; flex-wrap:wrap;}
+  .live-pill{
+    display:flex; align-items:center; gap:.4rem; background:var(--accent-critical-soft); color:var(--accent-critical);
+    padding:.3rem .7rem; border-radius:999px; font-size:.75rem; font-weight:600; text-transform:uppercase; letter-spacing:.06em;
+  }
+  .live-dot{width:8px;height:8px;border-radius:50%;background:var(--accent-critical); animation:pulse 1.6s infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.35;}}
+  .clock{font-size:1rem; color:var(--text-secondary);}
+
+  .layout{
+    display:grid; grid-template-columns:1.15fr .85fr; gap:1.25rem;
+    padding:1.5rem; max-width:1400px; margin:0 auto;
+  }
+  @media (max-width:960px){ .layout{grid-template-columns:1fr;} }
+
+  .panel{
+    background:var(--bg-panel); border:1px solid var(--line); border-radius:var(--radius);
+    padding:1.25rem; display:flex; flex-direction:column; gap:1rem;
+  }
+  .panel-head{display:flex; align-items:baseline; justify-content:space-between; gap:.5rem;}
+  .panel-head h2{font-size:1.05rem;}
+  .eyebrow{font-size:.68rem; text-transform:uppercase; letter-spacing:.12em; color:var(--text-secondary);}
+
+  .bowl-wrap{display:flex; flex-direction:column; align-items:center; gap:.75rem;}
+  svg#bowl{width:100%; max-width:460px; height:auto;}
+  .bowl-seg{stroke:var(--bg-primary); stroke-width:2; cursor:pointer; transition:opacity .15s;}
+  .bowl-seg:hover, .bowl-seg:focus-visible{opacity:.75;}
+  .bowl-legend{display:flex; gap:1rem; flex-wrap:wrap; justify-content:center; font-size:.75rem; color:var(--text-secondary);}
+  .legend-dot{width:9px;height:9px;border-radius:2px;display:inline-block;margin-right:.35rem;}
+  #sectionTooltip{
+    font-size:.85rem; color:var(--text-primary); background:var(--bg-panel-raised); border:1px solid var(--line);
+    border-radius:8px; padding:.6rem .8rem; min-height:1.4em; width:100%; text-align:center;
+  }
+
+  .alert-feed{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:.55rem; max-height:260px; overflow-y:auto;}
+  .alert-item{
+    display:flex; gap:.6rem; padding:.6rem .7rem; border-radius:8px; border:1px solid var(--line); background:var(--bg-panel-raised);
+    font-size:.85rem; align-items:flex-start;
+  }
+  .sev-badge{
+    flex:0 0 auto; font-size:.65rem; font-weight:700; text-transform:uppercase; letter-spacing:.05em;
+    padding:.15rem .45rem; border-radius:5px; margin-top:.1rem;
+  }
+  .sev-critical{background:var(--accent-critical-soft); color:var(--accent-critical);}
+  .sev-high{background:var(--accent-warn-soft); color:var(--accent-warn);}
+  .sev-info{background:var(--accent-info-soft); color:var(--accent-info);}
+  .alert-time{color:var(--text-secondary); font-size:.72rem;}
+
+  .report-form{display:flex; flex-direction:column; gap:.55rem; border-top:1px dashed var(--line); padding-top:.9rem;}
+  .report-form label{font-size:.75rem; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.05em;}
+  .report-form select, .report-form input{
+    background:var(--bg-panel-raised); border:1px solid var(--line); color:var(--text-primary);
+    padding:.5rem .6rem; border-radius:6px; font-size:.85rem; width:100%;
+  }
+  .report-form .row{display:flex; gap:.6rem;}
+  .btn{
+    background:var(--accent-info); color:#03131a; border:none; padding:.55rem .9rem; border-radius:6px;
+    font-weight:600; font-size:.85rem;
+  }
+  .btn:hover{filter:brightness(1.08);}
+  .btn-ghost{background:transparent; border:1px solid var(--line); color:var(--text-primary);}
+  .form-error{color:var(--accent-critical); font-size:.78rem; min-height:1em;}
+
+  table{width:100%; border-collapse:collapse; font-size:.85rem;}
+  th{text-align:left; color:var(--text-secondary); font-weight:600; font-size:.72rem; text-transform:uppercase; letter-spacing:.06em; padding:.4rem .5rem; border-bottom:1px solid var(--line);}
+  td{padding:.55rem .5rem; border-bottom:1px solid var(--line);}
+  .fill-bar{height:6px; border-radius:4px; background:var(--line); overflow:hidden;}
+  .fill-bar > span{display:block; height:100%; background:var(--accent-live);}
+  .stat-row{display:flex; gap:1rem; flex-wrap:wrap;}
+  .stat{flex:1; min-width:110px; background:var(--bg-panel-raised); border:1px solid var(--line); border-radius:8px; padding:.7rem .8rem;}
+  .stat .num{font-family:'JetBrains Mono'; font-size:1.35rem; font-weight:700;}
+  .stat .lbl{font-size:.7rem; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.05em;}
+
+  .toolbar{
+    grid-column:1 / -1; display:flex; flex-wrap:wrap; gap:.8rem; align-items:center;
+    background:var(--bg-panel); border:1px solid var(--line); border-radius:var(--radius); padding:1rem 1.25rem;
+  }
+  .toggle{
+    display:flex; align-items:center; gap:.5rem; background:var(--bg-panel-raised); border:1px solid var(--line);
+    border-radius:999px; padding:.4rem .8rem .4rem .5rem; font-size:.8rem;
+  }
+  .toggle input{accent-color:var(--accent-info); width:16px; height:16px;}
+  #captionTicker{
+    grid-column:1/-1; font-family:'JetBrains Mono'; font-size:.8rem; color:var(--accent-info);
+    background:var(--bg-panel-raised); border:1px dashed var(--line); border-radius:6px; padding:.5rem .8rem;
+    display:none;
+  }
+  #captionTicker.active{display:block;}
+
+  footer{
+    max-width:1400px; margin:0 auto; padding:1.5rem; color:var(--text-secondary); font-size:.78rem;
+    display:flex; flex-wrap:wrap; gap:.5rem; justify-content:space-between; border-top:1px solid var(--line);
+  }
+  .badge-row{display:flex; flex-wrap:wrap; gap:.4rem;}
+  .badge{background:var(--bg-panel-raised); border:1px solid var(--line); border-radius:999px; padding:.25rem .65rem;}
+
+  .sr-only{
+    position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden;
+    clip:rect(0,0,0,0); white-space:nowrap; border:0;
+  }
+</style>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to main content</a>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="brand-mark" aria-hidden="true">SP</div>
+    <div>
+      <h1>StadiumPulse</h1>
+      <p>Tournament Operations Control Room</p>
+    </div>
+  </div>
+  <div class="status-cluster">
+    <span class="live-pill"><span class="live-dot" aria-hidden="true"></span>Match Day — Live</span>
+    <span class="clock mono" id="clock" aria-live="off">--:--:--</span>
+  </div>
+</header>
+
+<div id="captionTicker" role="status" aria-live="polite"></div>
+
+<main id="main" class="layout">
+
+  <section class="panel" aria-labelledby="bowlHeading">
+    <div class="panel-head">
+      <div>
+        <p class="eyebrow">Live occupancy</p>
+        <h2 id="bowlHeading">Stadium Bowl — 16 sections</h2>
+      </div>
+      <span class="mono" id="totalOccupancy" style="color:var(--text-secondary);font-size:.85rem;"></span>
+    </div>
+    <div class="bowl-wrap">
+      <svg id="bowl" viewBox="0 0 400 400" role="img" aria-label="Stadium seating map showing live crowd density per section"></svg>
+      <div id="sectionTooltip" aria-live="polite">Hover or focus a section to see its live occupancy.</div>
+      <div class="bowl-legend">
+        <span><span class="legend-dot" style="background:var(--accent-live)"></span>Low (&lt;60%)</span>
+        <span><span class="legend-dot" style="background:var(--accent-warn)"></span>Busy (60–85%)</span>
+        <span><span class="legend-dot" style="background:var(--accent-critical)"></span>Critical (&gt;85%)</span>
+      </div>
+    </div>
+  </section>
+
+  <div style="display:flex;flex-direction:column;gap:1.25rem;">
+    <section class="panel" aria-labelledby="alertsHeading">
+      <div class="panel-head">
+        <div>
+          <p class="eyebrow">Security &amp; crowd safety</p>
+          <h2 id="alertsHeading">Live Alert Feed</h2>
+        </div>
+      </div>
+      <ul class="alert-feed" id="alertFeed" aria-live="polite"></ul>
+
+      <form class="report-form" id="reportForm" novalidate>
+        <p class="eyebrow" style="margin:0;">Report an incident</p>
+        <div class="row">
+          <div style="flex:1;">
+            <label for="reportSection">Section</label>
+            <select id="reportSection" required></select>
+          </div>
+          <div style="flex:2;">
+            <label for="reportDesc">Description</label>
+            <input id="reportDesc" type="text" maxlength="140" placeholder="e.g. Overcrowding near gate 4" required>
+          </div>
+        </div>
+        <div class="form-error" id="reportError" role="alert"></div>
+        <button class="btn" type="submit">Submit report</button>
+      </form>
+    </section>
+
+    <section class="panel" aria-labelledby="ticketHeading">
+      <div class="panel-head">
+        <div>
+          <p class="eyebrow">Ticketing &amp; tournament schedule</p>
+          <h2 id="ticketHeading">Upcoming Fixtures</h2>
+        </div>
+      </div>
+      <div class="stat-row" id="ticketStats"></div>
+      <table>
+        <thead>
+          <tr><th>Fixture</th><th>Date</th><th>Gate</th><th>Tickets sold</th></tr>
+        </thead>
+        <tbody id="ticketTable"></tbody>
+      </table>
+    </section>
+  </div>
+
+  <section class="toolbar" aria-labelledby="a11yHeading">
+    <h2 id="a11yHeading" class="sr-only">Accessibility and operations toolbar</h2>
+    <label class="toggle"><input type="checkbox" id="toggleContrast"> High contrast</label>
+    <label class="toggle"><input type="checkbox" id="toggleLargeText"> Larger text</label>
+    <label class="toggle"><input type="checkbox" id="toggleCaptions"> Live captions</label>
+    <label class="toggle"><input type="checkbox" id="toggleAudio"> Read alerts aloud</label>
+    <button class="btn btn-ghost" id="wheelchairBtn" type="button" aria-pressed="false">Highlight wheelchair-accessible seating</button>
+  </section>
+</main>
+
+<footer>
+  <div class="badge-row" aria-label="Hackathon evaluation focus">
+    <span class="badge">Code Quality</span>
+    <span class="badge">Security</span>
+    <span class="badge">Efficiency</span>
+    <span class="badge">Testing</span>
+    <span class="badge">Accessibility</span>
+    <span class="badge">Problem Statement Alignment</span>
+  </div>
+  <span>StadiumPulse — built for Smart Stadiums &amp; Tournament Operations · see README.md</span>
+</footer>
+
+<script>
+(function(){
+  "use strict";
+
+  function getDensityLevel(pct){
+    if (pct >= 85) return "critical";
+    if (pct >= 60) return "warn";
+    return "live";
+  }
+  function densityColor(level){
+    return level === "critical" ? "var(--accent-critical)"
+         : level === "warn" ? "var(--accent-warn)"
+         : "var(--accent-live)";
+  }
+  function escapeHtml(str){
+    return String(str).replace(/[&<>"']/g, function(c){
+      return ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"})[c];
+    });
+  }
+  function formatTime(d){
+    return d.toLocaleTimeString('en-GB', {hour12:false});
+  }
+  function clamp(n, min, max){ return Math.max(min, Math.min(max, n)); }
+
+  function polarToCartesian(cx, cy, r, angleDeg){
+    const a = (angleDeg - 90) * Math.PI / 180;
+    return { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) };
+  }
+  function describeDonutSegment(cx, cy, rOuter, rInner, startAngle, endAngle){
+    const p1 = polarToCartesian(cx, cy, rOuter, endAngle);
+    const p2 = polarToCartesian(cx, cy, rOuter, startAngle);
+    const p3 = polarToCartesian(cx, cy, rInner, startAngle);
+    const p4 = polarToCartesian(cx, cy, rInner, endAngle);
+    const largeArc = endAngle - startAngle <= 180 ? 0 : 1;
+    return [
+      "M", p1.x, p1.y,
+      "A", rOuter, rOuter, 0, largeArc, 0, p2.x, p2.y,
+      "L", p3.x, p3.y,
+      "A", rInner, rInner, 0, largeArc, 1, p4.x, p4.y,
+      "Z"
+    ].join(" ");
+  }
+
+  const STANDS = ["North", "East", "South", "West"];
+  const sections = [];
+  STANDS.forEach(function(stand){
+    for (let i = 1; i <= 4; i++){
+      const capacity = 3000 + Math.floor(Math.random()*800);
+      sections.push({
+        id: stand[0] + i,
+        name: stand + " " + i,
+        capacity: capacity,
+        count: Math.floor(capacity * (0.3 + Math.random()*0.5))
+      });
+    }
+  });
+
+  const fixtures = [
+    { name:"Falcons vs Titans — Semifinal", date:"08 Jul, 19:30", gate:"Gate 2", sold:92 },
+    { name:"Ravens vs Hawks — Semifinal", date:"09 Jul, 19:30", gate:"Gate 4", sold:78 },
+    { name:"Grand Final", date:"12 Jul, 18:00", gate:"All Gates", sold:64 }
+  ];
+
+  let alertIdCounter = 0;
+  const alerts = [];
+
+  const svg = document.getElementById("bowl");
+  const NS = "http://www.w3.org/2000/svg";
+  const cx = 200, cy = 200, rOuter = 190, rInner = 110;
+  const segAngle = 360 / sections.length;
+
+  function renderBowl(){
+    svg.innerHTML = "";
+    sections.forEach(function(sec, i){
+      const start = i * segAngle + 2;
+      const end = (i+1) * segAngle - 2;
+      const pct = clamp(Math.round((sec.count / sec.capacity) * 100), 0, 100);
+      const level = getDensityLevel(pct);
+      const path = document.createElementNS(NS, "path");
+      path.setAttribute("d", describeDonutSegment(cx, cy, rOuter, rInner, start, end));
+      path.setAttribute("fill", densityColor(level));
+      path.setAttribute("class", "bowl-seg");
+      path.setAttribute("tabindex", "0");
+      path.setAttribute("role", "button");
+      path.setAttribute("aria-label", sec.name + ": " + pct + " percent full");
+      const announce = function(){
+        document.getElementById("sectionTooltip").textContent =
+          sec.name + " — " + sec.count.toLocaleString() + " / " + sec.capacity.toLocaleString() +
+          " (" + pct + "% · " + level.toUpperCase() + ")";
+      };
+      path.addEventListener("mouseenter", announce);
+      path.addEventListener("focus", announce);
+      svg.appendChild(path);
+    });
+    const pitch = document.createElementNS(NS, "ellipse");
+    pitch.setAttribute("cx", cx); pitch.setAttribute("cy", cy);
+    pitch.setAttribute("rx", rInner-14); pitch.setAttribute("ry", rInner-14);
+    pitch.setAttribute("fill", "#123321"); pitch.setAttribute("stroke", "#2E7D5B"); pitch.setAttribute("stroke-width","2");
+    svg.appendChild(pitch);
+    const label = document.createElementNS(NS, "text");
+    label.setAttribute("x", cx); label.setAttribute("y", cy);
+    label.setAttribute("text-anchor","middle"); label.setAttribute("dominant-baseline","middle");
+    label.setAttribute("fill", "#F5F7FA"); label.setAttribute("font-size","13"); label.setAttribute("font-family","Oswald, sans-serif");
+    label.textContent = "SEMIFINAL";
+    svg.appendChild(label);
+
+    const total = sections.reduce((a,s)=>a+s.count,0);
+    const cap = sections.reduce((a,s)=>a+s.capacity,0);
+    document.getElementById("totalOccupancy").textContent =
+      total.toLocaleString() + " / " + cap.toLocaleString() + " (" + Math.round(total/cap*100) + "%)";
+  }
+
+  function pushAlert(sevLevel, text, opts){
+    opts = opts || {};
+    alertIdCounter++;
+    const item = { id: alertIdCounter, sev: sevLevel, text: text, time: new Date() };
+    alerts.unshift(item);
+    if (alerts.length > 30) alerts.pop();
+    renderAlerts();
+    if (opts.speak !== false && document.getElementById("toggleAudio").checked && (sevLevel === "critical" || sevLevel === "high")){
+      speak(text);
+    }
+  }
+  function renderAlerts(){
+    const feed = document.getElementById("alertFeed");
+    feed.innerHTML = "";
+    alerts.slice(0, 12).forEach(function(a){
+      const li = document.createElement("li");
+      li.className = "alert-item";
+      const sevClass = a.sev === "critical" ? "sev-critical" : a.sev === "high" ? "sev-high" : "sev-info";
+      const badge = document.createElement("span");
+      badge.className = "sev-badge " + sevClass;
+      badge.textContent = a.sev;
+      const body = document.createElement("div");
+      const p = document.createElement("div");
+      p.textContent = a.text;
+      const time = document.createElement("div");
+      time.className = "alert-time mono";
+      time.textContent = formatTime(a.time);
+      body.appendChild(p); body.appendChild(time);
+      li.appendChild(badge); li.appendChild(body);
+      feed.appendChild(li);
+    });
+  }
+  function speak(text){
+    if (!("speechSynthesis" in window)) return;
+    try{
+      const u = new SpeechSynthesisUtterance(text);
+      u.rate = 1; u.pitch = 1;
+      window.speechSynthesis.speak(u);
+    }catch(e){ /* non-critical enhancement */ }
+  }
+
+  function renderTicketing(){
+    const stats = document.getElementById("ticketStats");
+    const avgSold = Math.round(fixtures.reduce((a,f)=>a+f.sold,0)/fixtures.length);
+    stats.innerHTML = "";
+    [
+      { num: fixtures.length, lbl: "Upcoming fixtures" },
+      { num: avgSold + "%", lbl: "Avg. tickets sold" },
+      { num: alerts.length, lbl: "Alerts today" }
+    ].forEach(function(s){
+      const div = document.createElement("div");
+      div.className = "stat";
+      const numDiv = document.createElement("div"); numDiv.className = "num mono"; numDiv.textContent = s.num;
+      const lblDiv = document.createElement("div"); lblDiv.className = "lbl"; lblDiv.textContent = s.lbl;
+      div.appendChild(numDiv); div.appendChild(lblDiv);
+      stats.appendChild(div);
+    });
+
+    const tbody = document.getElementById("ticketTable");
+    tbody.innerHTML = "";
+    fixtures.forEach(function(f){
+      const tr = document.createElement("tr");
+      const tdName = document.createElement("td"); tdName.textContent = f.name;
+      const tdDate = document.createElement("td"); tdDate.textContent = f.date; tdDate.className="mono";
+      const tdGate = document.createElement("td"); tdGate.textContent = f.gate;
+      const tdSold = document.createElement("td");
+      const bar = document.createElement("div"); bar.className = "fill-bar";
+      const span = document.createElement("span"); span.style.width = f.sold + "%";
+      bar.appendChild(span);
+      tdSold.appendChild(bar);
+      tdSold.appendChild(document.createTextNode(" " + f.sold + "%"));
+      tr.appendChild(tdName); tr.appendChild(tdDate); tr.appendChild(tdGate); tr.appendChild(tdSold);
+      tbody.appendChild(tr);
+    });
+  }
+
+  const reportSectionEl = document.getElementById("reportSection");
+  sections.forEach(function(sec){
+    const opt = document.createElement("option");
+    opt.value = sec.id; opt.textContent = sec.name;
+    reportSectionEl.appendChild(opt);
+  });
+
+  document.getElementById("reportForm").addEventListener("submit", function(e){
+    e.preventDefault();
+    const errEl = document.getElementById("reportError");
+    const descEl = document.getElementById("reportDesc");
+    const raw = descEl.value.trim();
+    if (!raw){
+      errEl.textContent = "Please describe the incident before submitting.";
+      return;
+    }
+    if (raw.length > 140){
+      errEl.textContent = "Description must be 140 characters or fewer.";
+      return;
+    }
+    errEl.textContent = "";
+    const clean = escapeHtml(raw);
+    const sectionName = reportSectionEl.options[reportSectionEl.selectedIndex].textContent;
+    pushAlert("high", "Reported at " + sectionName + ": " + clean, { speak:true });
+    descEl.value = "";
+  });
+
+  document.getElementById("toggleContrast").addEventListener("change", function(e){
+    document.body.classList.toggle("high-contrast", e.target.checked);
+  });
+  document.getElementById("toggleLargeText").addEventListener("change", function(e){
+    document.documentElement.style.setProperty("--font-scale", e.target.checked ? "1.25" : "1");
+  });
+  document.getElementById("toggleCaptions").addEventListener("change", function(e){
+    const ticker = document.getElementById("captionTicker");
+    ticker.classList.toggle("active", e.target.checked);
+    if (e.target.checked){ startCaptions(); } else { stopCaptions(); }
+  });
+  let captionTimer = null;
+  const captionLines = [
+    "[Commentary] Kickoff — both sides settling into shape.",
+    "[Commentary] Chance on the left wing, cleared by the defense.",
+    "[Announcement] Please keep aisles clear near Gate 4.",
+    "[Commentary] Half-time approaching, score still level.",
+    "[Announcement] Water stations open at all concourse levels."
+  ];
+  function startCaptions(){
+    let i = 0;
+    const ticker = document.getElementById("captionTicker");
+    ticker.textContent = captionLines[0];
+    captionTimer = setInterval(function(){
+      i = (i+1) % captionLines.length;
+      ticker.textContent = captionLines[i];
+    }, 4000);
+  }
+  function stopCaptions(){
+    clearInterval(captionTimer);
+  }
+  document.getElementById("wheelchairBtn").addEventListener("click", function(){
+    const pressed = this.getAttribute("aria-pressed") === "true";
+    this.setAttribute("aria-pressed", String(!pressed));
+    document.querySelectorAll(".bowl-seg").forEach(function(el, idx){
+      if (sections[idx].name.endsWith("1")){
+        el.style.stroke = !pressed ? "var(--accent-info)" : "var(--bg-primary)";
+        el.style.strokeWidth = !pressed ? "5" : "2";
+      }
+    });
+  });
+
+  function tickClock(){
+    document.getElementById("clock").textContent = formatTime(new Date());
+  }
+  function simulate(){
+    const sec = sections[Math.floor(Math.random()*sections.length)];
+    const delta = Math.floor((Math.random()-0.4) * sec.capacity * 0.06);
+    sec.count = clamp(sec.count + delta, 0, sec.capacity);
+    renderBowl();
+    const pct = Math.round((sec.count/sec.capacity)*100);
+    const level = getDensityLevel(pct);
+    if (level === "critical" && Math.random() < 0.6){
+      pushAlert("critical", sec.name + " has reached " + pct + "% capacity — consider entry throttling.");
+    } else if (Math.random() < 0.08){
+      pushAlert("info", "Routine patrol check-in: " + sec.name + " clear.");
+    }
+  }
+
+  renderBowl();
+  renderTicketing();
+  pushAlert("info", "Control room initialised. All systems nominal.", { speak:false });
+  tickClock();
+  setInterval(tickClock, 1000);
+  setInterval(simulate, 3500);
+  setInterval(renderTicketing, 5000);
+})();
+</script>
+</body>
+</html>
