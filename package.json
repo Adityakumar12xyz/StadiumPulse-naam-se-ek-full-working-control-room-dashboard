@@ -1,11 +1,15 @@
 {
   "name": "stadiumpulse",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "StadiumPulse — Smart Stadium & Tournament Operations control room dashboard",
   "main": "index.html",
   "scripts": {
     "test": "node tests.js",
-    "start": "npx serve ."
+    "start": "npx --yes serve ."
   },
-  "license": "MIT"
+  "keywords": ["stadium", "hackathon", "accessibility", "crowd-safety", "tournament-operations"],
+  "license": "MIT",
+  "engines": {
+    "node": ">=14"
+  }
 }

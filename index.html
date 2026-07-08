@@ -3,13 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'">
 <meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="dark">
 <title>StadiumPulse — Smart Stadium &amp; Tournament Operations</title>
-<meta name="description" content="Real-time stadium operations control room: crowd density, security alerts, ticketing, gate/staff logistics, tournament scheduling, and accessibility tools.">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<meta name="description" content="Real-time stadium operations control room: crowd density, security alerts, gate/staff logistics, ticketing, tournament scheduling, and accessibility tools.">
 <style>
   :root{
     --bg-primary:#0B1220;
@@ -28,6 +26,9 @@
     --accent-info-soft:rgba(62,143,176,.18);
     --radius:10px;
     --font-scale:1;
+    --font-display:'Arial Narrow', 'Helvetica Neue Condensed', system-ui, -apple-system, sans-serif;
+    --font-body:system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    --font-mono:ui-monospace, 'Cascadia Code', 'Consolas', 'Liberation Mono', monospace;
     font-size:calc(16px * var(--font-scale));
   }
   *{box-sizing:border-box;}
@@ -35,7 +36,7 @@
   body{
     background:var(--bg-primary);
     color:var(--text-primary);
-    font-family:'Inter',system-ui,sans-serif;
+    font-family:var(--font-body);
     line-height:1.5;
     min-height:100vh;
   }
@@ -52,8 +53,11 @@
     --accent-info:#6FD3FF;
   }
   body.high-contrast .panel, body.high-contrast .topbar, body.high-contrast .toolbar{ border-width:2px; }
-  h1,h2,h3{font-family:'Oswald',sans-serif;letter-spacing:.02em;margin:0;}
-  .mono{font-family:'JetBrains Mono',monospace;}
+  h1,h2,h3{
+    font-family:var(--font-display); font-weight:700; letter-spacing:.03em;
+    text-transform:uppercase; margin:0;
+  }
+  .mono{font-family:var(--font-mono);}
   a{color:var(--accent-info);}
   button{font-family:inherit;cursor:pointer;}
   button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible, [tabindex]:focus-visible{
@@ -71,15 +75,15 @@
   .topbar{
     display:flex; align-items:center; justify-content:space-between; gap:1rem;
     padding:.9rem 1.5rem; background:var(--bg-panel); border-bottom:1px solid var(--line);
-    position:sticky; top:0; z-index:20; flex-wrap:wrap;
+    position:sticky; top:0; z-index:20; flex-wrap:wrap; content-visibility:auto;
   }
   .brand{display:flex; align-items:center; gap:.7rem;}
   .brand-mark{
     width:34px;height:34px;border-radius:8px;
     background:conic-gradient(from 45deg, var(--accent-live), var(--accent-info), var(--accent-warn), var(--accent-live));
-    display:flex; align-items:center; justify-content:center; font-family:'Oswald'; font-weight:700; font-size:.85rem; color:#04121a;
+    display:flex; align-items:center; justify-content:center; font-family:var(--font-display); font-weight:700; font-size:.85rem; color:#04121a;
   }
-  .brand h1{font-size:1.15rem;}
+  .brand h1{font-size:1.1rem;}
   .brand p{margin:0; font-size:.72rem; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.12em;}
   .status-cluster{display:flex; align-items:center; gap:1rem; flex-wrap:wrap;}
   .live-pill{
@@ -102,10 +106,10 @@
 
   .panel{
     background:var(--bg-panel); border:1px solid var(--line); border-radius:var(--radius);
-    padding:1.25rem; display:flex; flex-direction:column; gap:1rem;
+    padding:1.25rem; display:flex; flex-direction:column; gap:1rem; content-visibility:auto; contain-intrinsic-size:400px;
   }
   .panel-head{display:flex; align-items:baseline; justify-content:space-between; gap:.5rem;}
-  .panel-head h2{font-size:1.05rem;}
+  .panel-head h2{font-size:1rem;}
   .eyebrow{font-size:.68rem; text-transform:uppercase; letter-spacing:.12em; color:var(--text-secondary);}
 
   .bowl-wrap{display:flex; flex-direction:column; align-items:center; gap:.75rem;}
@@ -146,9 +150,10 @@
     font-weight:600; font-size:.85rem;
   }
   .btn:hover{filter:brightness(1.08);}
-  .btn:disabled{opacity:.5; cursor:not-allowed;}
+  .btn:disabled{opacity:.5; cursor:not-allowed; filter:none;}
   .btn-ghost{background:transparent; border:1px solid var(--line); color:var(--text-primary);}
   .form-error{color:var(--accent-critical); font-size:.78rem; min-height:1em;}
+  .form-hint{color:var(--text-secondary); font-size:.72rem; min-height:1em;}
 
   table{width:100%; border-collapse:collapse; font-size:.85rem;}
   th{text-align:left; color:var(--text-secondary); font-weight:600; font-size:.72rem; text-transform:uppercase; letter-spacing:.06em; padding:.4rem .5rem; border-bottom:1px solid var(--line);}
@@ -157,7 +162,7 @@
   .fill-bar > span{display:block; height:100%; background:var(--accent-live);}
   .stat-row{display:flex; gap:1rem; flex-wrap:wrap;}
   .stat{flex:1; min-width:110px; background:var(--bg-panel-raised); border:1px solid var(--line); border-radius:8px; padding:.7rem .8rem;}
-  .stat .num{font-family:'JetBrains Mono'; font-size:1.35rem; font-weight:700;}
+  .stat .num{font-family:var(--font-mono); font-size:1.35rem; font-weight:700;}
   .stat .lbl{font-size:.7rem; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.05em;}
 
   .gate-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:.6rem;}
@@ -175,7 +180,7 @@
   }
   .toggle input{accent-color:var(--accent-info); width:16px; height:16px;}
   #captionTicker{
-    grid-column:1/-1; font-family:'JetBrains Mono'; font-size:.8rem; color:var(--accent-info);
+    grid-column:1/-1; font-family:var(--font-mono); font-size:.8rem; color:var(--accent-info);
     background:var(--bg-panel-raised); border:1px dashed var(--line); border-radius:6px; padding:.5rem .8rem;
     display:none;
   }
@@ -264,6 +269,7 @@
         </div>
         <div class="char-count" id="charCount">0 / 140</div>
         <div class="form-error" id="reportError" role="alert"></div>
+        <div class="form-hint" id="reportHint" aria-live="polite"></div>
         <button class="btn" type="submit" id="reportSubmit">Submit report</button>
       </form>
     </section>
@@ -320,60 +326,112 @@
   "use strict";
 
   /* =========================================================
-   * Constants (single source of truth — no magic numbers)
+   * CONFIG — every tunable constant lives here, frozen so it
+   * can't be mutated at runtime by accident or by a bad actor
+   * poking at the global scope.
    * ======================================================= */
-  var CONFIG = {
+  var CONFIG = Object.freeze({
     DENSITY_WARN_PCT: 60,
     DENSITY_CRITICAL_PCT: 85,
+    GATE_WARN_QUEUE: 12,
+    GATE_CRITICAL_QUEUE: 25,
     MAX_ALERTS: 30,
     ALERTS_SHOWN: 12,
     REPORT_MAX_LEN: 140,
+    REPORT_COOLDOWN_MS: 3000,
+    MAX_REPORTS_PER_SESSION: 10,
     TICK_MS: 1000,
     SIMULATE_EVERY_N_TICKS: 4,
     REFRESH_EVERY_N_TICKS: 5,
     STANDS: ["North", "East", "South", "West"],
     SECTIONS_PER_STAND: 4,
     GATES: ["Gate 1", "Gate 2", "Gate 3", "Gate 4", "Gate 5", "Gate 6"]
-  };
+  });
 
   /* =========================================================
-   * Pure logic layer — no DOM access, fully unit-testable.
-   * Mirrored 1:1 in tests.js.
+   * Pure logic layer — no DOM access, no side effects, fully
+   * unit-testable in isolation. Mirrored 1:1 in tests.js.
    * ======================================================= */
+
+  /** @param {number} pct 0-100 occupancy percentage
+   *  @returns {"live"|"warn"|"critical"} */
   function getDensityLevel(pct){
     if (pct >= CONFIG.DENSITY_CRITICAL_PCT) return "critical";
     if (pct >= CONFIG.DENSITY_WARN_PCT) return "warn";
     return "live";
   }
+
+  /** @param {"live"|"warn"|"critical"} level
+   *  @returns {string} a CSS custom-property reference */
   function densityColorVar(level){
     return level === "critical" ? "var(--accent-critical)"
          : level === "warn" ? "var(--accent-warn)"
          : "var(--accent-live)";
   }
+
+  /** @param {number} queue minutes of wait at a gate
+   *  @returns {"live"|"warn"|"critical"} */
+  function gateStatusLevel(queue){
+    if (queue >= CONFIG.GATE_CRITICAL_QUEUE) return "critical";
+    if (queue >= CONFIG.GATE_WARN_QUEUE) return "warn";
+    return "live";
+  }
+
+  /** HTML-escapes a string so it is safe to insert as text content.
+   *  @param {*} str
+   *  @returns {string} */
   function escapeHtml(str){
     return String(str).replace(/[&<>"']/g, function(c){
       return ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"})[c];
     });
   }
+
+  /** @param {number} n @param {number} min @param {number} max @returns {number} */
   function clamp(n, min, max){ return Math.max(min, Math.min(max, n)); }
 
+  /** Validates and sanitizes free-text incident descriptions.
+   *  @param {string} text
+   *  @param {number} [maxLen]
+   *  @returns {{ok:true,value:string}|{ok:false,error:string}} */
   function validateIncidentReport(text, maxLen){
+    var limit = maxLen || CONFIG.REPORT_MAX_LEN;
     var trimmed = (text || "").trim();
     if (!trimmed) return { ok:false, error:"Please describe the incident before submitting." };
-    if (trimmed.length > (maxLen || CONFIG.REPORT_MAX_LEN)){
-      return { ok:false, error:"Description must be " + (maxLen || CONFIG.REPORT_MAX_LEN) + " characters or fewer." };
+    if (trimmed.length > limit){
+      return { ok:false, error:"Description must be " + limit + " characters or fewer." };
     }
     return { ok:true, value: escapeHtml(trimmed) };
   }
 
+  /** Client-side rate limit check (defense in depth; a real backend
+   *  must enforce this too — see SECURITY.md).
+   *  @param {number|null} lastSubmitAt epoch ms of the last accepted submission, or null
+   *  @param {number} now epoch ms
+   *  @param {number} cooldownMs
+   *  @returns {boolean} true if the caller must wait before submitting again */
+  function isRateLimited(lastSubmitAt, now, cooldownMs){
+    if (lastSubmitAt === null || lastSubmitAt === undefined) return false;
+    return (now - lastSubmitAt) < cooldownMs;
+  }
+
+  /** @param {Array} list @param {number} max @returns {Array} */
   function trimAlerts(list, max){
     return list.length > max ? list.slice(0, max) : list;
   }
 
+  /** @param {number} tick @param {number} everyN @returns {boolean} */
+  function shouldRunOnTick(tick, everyN){
+    return everyN > 0 && (tick % everyN === 0);
+  }
+
+  /** @param {number} cx @param {number} cy @param {number} r @param {number} angleDeg
+   *  @returns {{x:number,y:number}} */
   function polarToCartesian(cx, cy, r, angleDeg){
     var a = (angleDeg - 90) * Math.PI / 180;
     return { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) };
   }
+
+  /** Builds an SVG path `d` string for one donut-chart segment. */
   function describeDonutSegment(cx, cy, rOuter, rInner, startAngle, endAngle){
     var p1 = polarToCartesian(cx, cy, rOuter, endAngle);
     var p2 = polarToCartesian(cx, cy, rOuter, startAngle);
@@ -384,6 +442,10 @@
             "L", p3.x, p3.y, "A", rInner, rInner, 0, largeArc, 1, p4.x, p4.y, "Z"].join(" ");
   }
 
+  /** Generates the stadium's section model. Accepts an injectable RNG
+   *  so behaviour is deterministic and testable.
+   *  @param {string[]} stands @param {number} perStand @param {() => number} [rand]
+   *  @returns {Array<{id:string,name:string,capacity:number,count:number}>} */
   function buildSections(stands, perStand, rand){
     rand = rand || Math.random;
     var out = [];
@@ -401,15 +463,9 @@
     return out;
   }
 
-  function gateStatusLevel(queue){
-    if (queue >= 25) return "critical";
-    if (queue >= 12) return "warn";
-    return "live";
-  }
-
   /* =========================================================
    * App bootstrap — wrapped so a single failure surfaces a
-   * visible error instead of silently breaking the page.
+   * visible, accessible error instead of silently breaking.
    * ======================================================= */
   try{
     initApp();
@@ -438,12 +494,14 @@
 
     var alertIdCounter = 0;
     var alerts = [];
+    var lastReportAt = null;
+    var reportsThisSession = 0;
 
     var svg = document.getElementById("bowl");
     var NS = "http://www.w3.org/2000/svg";
     var cx = 200, cy = 200, rOuter = 190, rInner = 110;
     var segAngle = 360 / sections.length;
-    var sectionEls = []; // cached refs for O(1) partial updates
+    var sectionEls = []; // cached refs for O(1) partial updates, avoids full-SVG rebuilds
 
     function buildBowlOnce(){
       svg.innerHTML = "";
@@ -470,7 +528,7 @@
       var label = document.createElementNS(NS, "text");
       label.setAttribute("x", cx); label.setAttribute("y", cy);
       label.setAttribute("text-anchor","middle"); label.setAttribute("dominant-baseline","middle");
-      label.setAttribute("fill", "#F5F7FA"); label.setAttribute("font-size","13"); label.setAttribute("font-family","Oswald, sans-serif");
+      label.setAttribute("fill", "#F5F7FA"); label.setAttribute("font-size","13"); label.setAttribute("font-family","var(--font-display)");
       label.textContent = "SEMIFINAL";
       svg.appendChild(label);
       updateTotalOccupancy();
@@ -481,7 +539,7 @@
       var level = getDensityLevel(pct);
       path.setAttribute("fill", densityColorVar(level));
       path.setAttribute("aria-label", sec.name + ": " + pct + " percent full, " + level + " density");
-      path.dataset.pct = pct;
+      path.dataset.pct = String(pct);
       path.dataset.level = level;
     }
     function showSectionDetail(sec, path){
@@ -559,6 +617,7 @@
 
       var tbody = document.getElementById("ticketTable");
       tbody.innerHTML = "";
+      var frag = document.createDocumentFragment();
       fixtures.forEach(function(f){
         var tr = document.createElement("tr");
         var tdName = document.createElement("td"); tdName.textContent = f.name;
@@ -571,13 +630,15 @@
         tdSold.appendChild(bar);
         tdSold.appendChild(document.createTextNode(" " + f.sold + "%"));
         tr.appendChild(tdName); tr.appendChild(tdDate); tr.appendChild(tdGate); tr.appendChild(tdSold);
-        tbody.appendChild(tr);
+        frag.appendChild(tr);
       });
+      tbody.appendChild(frag);
     }
 
     function renderGates(){
       var grid = document.getElementById("gateGrid");
       grid.innerHTML = "";
+      var frag = document.createDocumentFragment();
       gates.forEach(function(g){
         var level = gateStatusLevel(g.queue);
         var card = document.createElement("div");
@@ -592,11 +653,12 @@
         staffEl.style.color = "var(--text-secondary)";
         staffEl.textContent = g.staff + " staff on duty";
         card.appendChild(nameEl); card.appendChild(statusEl); card.appendChild(staffEl);
-        grid.appendChild(card);
+        frag.appendChild(card);
       });
+      grid.appendChild(frag);
     }
 
-    /* ---- Incident report form (validated, sanitized, tamper-checked) ---- */
+    /* ---- Incident report form: validated, sanitized, tamper-checked, rate-limited ---- */
     var reportSectionEl = document.getElementById("reportSection");
     sections.forEach(function(sec){
       var opt = document.createElement("option");
@@ -605,6 +667,8 @@
     });
     var descEl = document.getElementById("reportDesc");
     var charCountEl = document.getElementById("charCount");
+    var submitBtn = document.getElementById("reportSubmit");
+    var hintEl = document.getElementById("reportHint");
     descEl.addEventListener("input", function(){
       charCountEl.textContent = descEl.value.length + " / " + CONFIG.REPORT_MAX_LEN;
     });
@@ -612,20 +676,49 @@
     document.getElementById("reportForm").addEventListener("submit", function(e){
       e.preventDefault();
       var errEl = document.getElementById("reportError");
+      var now = Date.now();
+
+      if (isRateLimited(lastReportAt, now, CONFIG.REPORT_COOLDOWN_MS)){
+        errEl.textContent = "Please wait a moment before submitting another report.";
+        return;
+      }
+      if (reportsThisSession >= CONFIG.MAX_REPORTS_PER_SESSION){
+        errEl.textContent = "Report limit reached for this session. Contact the control room directly.";
+        submitBtn.disabled = true;
+        return;
+      }
       var result = validateIncidentReport(descEl.value, CONFIG.REPORT_MAX_LEN);
       if (!result.ok){ errEl.textContent = result.error; return; }
-      // Defence-in-depth: confirm the submitted section id is one we actually issued,
-      // not a value injected via devtools/tampering.
+
+      // Defence-in-depth: confirm the submitted section id is one we actually
+      // issued, rejecting a devtools-tampered <option value>.
       var validIds = sections.map(function(s){ return s.id; });
       if (validIds.indexOf(reportSectionEl.value) === -1){
         errEl.textContent = "Invalid section selected.";
         return;
       }
+
       errEl.textContent = "";
       var sectionName = escapeHtml(reportSectionEl.options[reportSectionEl.selectedIndex].textContent);
       pushAlert("high", "Reported at " + sectionName + ": " + result.value, { speak:true });
       descEl.value = "";
       charCountEl.textContent = "0 / " + CONFIG.REPORT_MAX_LEN;
+      lastReportAt = now;
+      reportsThisSession++;
+
+      submitBtn.disabled = true;
+      var remaining = CONFIG.REPORT_COOLDOWN_MS / 1000;
+      hintEl.textContent = "Report received. You can submit again in " + remaining + "s.";
+      var countdown = setInterval(function(){
+        remaining -= 1;
+        if (remaining <= 0){
+          clearInterval(countdown);
+          submitBtn.disabled = false;
+          hintEl.textContent = "";
+        } else {
+          hintEl.textContent = "Report received. You can submit again in " + remaining + "s.";
+        }
+      }, 1000);
     });
 
     /* ---- Accessibility toggles ---- */
@@ -706,8 +799,8 @@
     function mainLoop(){
       tick++;
       tickClock();
-      if (tick % CONFIG.SIMULATE_EVERY_N_TICKS === 0){ simulateCrowd(); simulateWeather(); }
-      if (tick % CONFIG.REFRESH_EVERY_N_TICKS === 0){ renderTicketing(); simulateGates(); }
+      if (shouldRunOnTick(tick, CONFIG.SIMULATE_EVERY_N_TICKS)){ simulateCrowd(); simulateWeather(); }
+      if (shouldRunOnTick(tick, CONFIG.REFRESH_EVERY_N_TICKS)){ renderTicketing(); simulateGates(); }
     }
 
     /* ---- Init ---- */

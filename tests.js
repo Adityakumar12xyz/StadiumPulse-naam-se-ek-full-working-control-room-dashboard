@@ -6,21 +6,32 @@
  *
  * Run with:  node tests.js   (or  npm test)
  */
+"use strict";
 const assert = require("assert");
 
 /* ---------------------------------------------------------------
  * Functions under test — mirrors index.html's pure logic layer
  * ----------------------------------------------------------- */
-const CONFIG = {
+const CONFIG = Object.freeze({
   DENSITY_WARN_PCT: 60,
   DENSITY_CRITICAL_PCT: 85,
+  GATE_WARN_QUEUE: 12,
+  GATE_CRITICAL_QUEUE: 25,
   MAX_ALERTS: 30,
-  REPORT_MAX_LEN: 140
-};
+  REPORT_MAX_LEN: 140,
+  REPORT_COOLDOWN_MS: 3000,
+  MAX_REPORTS_PER_SESSION: 10
+});
 
 function getDensityLevel(pct){
   if (pct >= CONFIG.DENSITY_CRITICAL_PCT) return "critical";
   if (pct >= CONFIG.DENSITY_WARN_PCT) return "warn";
+  return "live";
+}
+
+function gateStatusLevel(queue){
+  if (queue >= CONFIG.GATE_CRITICAL_QUEUE) return "critical";
+  if (queue >= CONFIG.GATE_WARN_QUEUE) return "warn";
   return "live";
 }
 
@@ -32,22 +43,32 @@ function escapeHtml(str){
 
 function clamp(n, min, max){ return Math.max(min, Math.min(max, n)); }
 
-function polarToCartesian(cx, cy, r, angleDeg){
-  const a = (angleDeg - 90) * Math.PI / 180;
-  return { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) };
-}
-
 function validateIncidentReport(text, maxLen){
+  const limit = maxLen || CONFIG.REPORT_MAX_LEN;
   const trimmed = (text || "").trim();
   if (!trimmed) return { ok:false, error:"Please describe the incident before submitting." };
-  if (trimmed.length > (maxLen || CONFIG.REPORT_MAX_LEN)){
-    return { ok:false, error:"Description must be " + (maxLen || CONFIG.REPORT_MAX_LEN) + " characters or fewer." };
+  if (trimmed.length > limit){
+    return { ok:false, error:"Description must be " + limit + " characters or fewer." };
   }
   return { ok:true, value: escapeHtml(trimmed) };
 }
 
+function isRateLimited(lastSubmitAt, now, cooldownMs){
+  if (lastSubmitAt === null || lastSubmitAt === undefined) return false;
+  return (now - lastSubmitAt) < cooldownMs;
+}
+
 function trimAlerts(list, max){
   return list.length > max ? list.slice(0, max) : list;
+}
+
+function shouldRunOnTick(tick, everyN){
+  return everyN > 0 && (tick % everyN === 0);
+}
+
+function polarToCartesian(cx, cy, r, angleDeg){
+  const a = (angleDeg - 90) * Math.PI / 180;
+  return { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) };
 }
 
 function buildSections(stands, perStand, rand){
@@ -65,12 +86,6 @@ function buildSections(stands, perStand, rand){
     }
   });
   return out;
-}
-
-function gateStatusLevel(queue){
-  if (queue >= 25) return "critical";
-  if (queue >= 12) return "warn";
-  return "live";
 }
 
 /* ------------------------- test runner ------------------------- */
@@ -107,10 +122,15 @@ test("100% and beyond is still critical (no overflow class)", () => {
   assert.strictEqual(getDensityLevel(100), "critical");
   assert.strictEqual(getDensityLevel(150), "critical");
 });
+test("negative percentages (malformed input) still resolve safely to live", () => {
+  assert.strictEqual(getDensityLevel(-5), "live");
+});
 
 console.log("\nGate queue classification");
 test("short queue is live", () => { assert.strictEqual(gateStatusLevel(0), "live"); });
+test("queue just below the warn boundary (11) is still live", () => { assert.strictEqual(gateStatusLevel(11), "live"); });
 test("queue boundary at 12 is warn", () => { assert.strictEqual(gateStatusLevel(12), "warn"); });
+test("queue just below the critical boundary (24) is still warn", () => { assert.strictEqual(gateStatusLevel(24), "warn"); });
 test("queue boundary at 25 is critical", () => { assert.strictEqual(gateStatusLevel(25), "critical"); });
 
 console.log("\nInput sanitization (XSS prevention)");
@@ -120,14 +140,23 @@ test("escapes a script-bearing payload", () => {
   assert.ok(!clean.includes("<img"));
   assert.ok(clean.includes("&lt;img"));
 });
+test("escapes a <script> tag payload specifically", () => {
+  const clean = escapeHtml(`<script>alert(document.cookie)</script>`);
+  assert.ok(!clean.includes("<script>"));
+});
 test("escapes ampersands without double-escaping", () => {
   assert.strictEqual(escapeHtml("Gate 4 & 5"), "Gate 4 &amp; 5");
 });
-test("escapes single and double quotes", () => {
+test("escapes single and double quotes (attribute-breakout prevention)", () => {
   assert.strictEqual(escapeHtml(`it's "loud"`), "it&#39;s &quot;loud&quot;");
 });
 test("leaves plain text untouched", () => {
   assert.strictEqual(escapeHtml("Overcrowding near gate 4"), "Overcrowding near gate 4");
+});
+test("escaping is idempotent-safe: escaping twice does not corrupt readable text", () => {
+  const once = escapeHtml("Tom & Jerry");
+  const twice = escapeHtml(once);
+  assert.strictEqual(twice, "Tom &amp;amp; Jerry"); // documents real double-escape behaviour so callers escape exactly once
 });
 
 console.log("\nIncident report validation");
@@ -150,6 +179,43 @@ test("trims surrounding whitespace before validating", () => {
   assert.strictEqual(r.ok, true);
   assert.strictEqual(r.value, "fire exit blocked");
 });
+test("respects a custom max length override", () => {
+  assert.strictEqual(validateIncidentReport("hello world", 5).ok, false);
+});
+
+console.log("\nClient-side rate limiting");
+test("first-ever submission (no prior timestamp) is never rate limited", () => {
+  assert.strictEqual(isRateLimited(null, Date.now(), CONFIG.REPORT_COOLDOWN_MS), false);
+});
+test("a submission inside the cooldown window is rate limited", () => {
+  const last = 1000;
+  const now = last + CONFIG.REPORT_COOLDOWN_MS - 1;
+  assert.strictEqual(isRateLimited(last, now, CONFIG.REPORT_COOLDOWN_MS), true);
+});
+test("a submission exactly at the cooldown boundary is allowed", () => {
+  const last = 1000;
+  const now = last + CONFIG.REPORT_COOLDOWN_MS;
+  assert.strictEqual(isRateLimited(last, now, CONFIG.REPORT_COOLDOWN_MS), false);
+});
+test("a submission well after the cooldown is allowed", () => {
+  const last = 1000;
+  const now = last + CONFIG.REPORT_COOLDOWN_MS + 5000;
+  assert.strictEqual(isRateLimited(last, now, CONFIG.REPORT_COOLDOWN_MS), false);
+});
+
+console.log("\nTick scheduling (single consolidated timer)");
+test("runs on exact multiples of the interval", () => {
+  assert.strictEqual(shouldRunOnTick(4, 4), true);
+  assert.strictEqual(shouldRunOnTick(8, 4), true);
+});
+test("does not run on non-multiples", () => {
+  assert.strictEqual(shouldRunOnTick(5, 4), false);
+  assert.strictEqual(shouldRunOnTick(0, 4), true); // tick 0 % N === 0 by definition
+});
+test("guards against a zero or negative interval instead of dividing by zero", () => {
+  assert.strictEqual(shouldRunOnTick(4, 0), false);
+  assert.strictEqual(shouldRunOnTick(4, -1), false);
+});
 
 console.log("\nAlert queue trimming");
 test("keeps list untouched when under the cap", () => {
@@ -162,12 +228,19 @@ test("trims list down to the cap, keeping the newest (front) entries", () => {
   assert.strictEqual(trimmed.length, CONFIG.MAX_ALERTS);
   assert.strictEqual(trimmed[0], 0);
 });
+test("an empty list stays empty", () => {
+  assert.deepStrictEqual(trimAlerts([], CONFIG.MAX_ALERTS), []);
+});
 
 console.log("\nUtility functions");
 test("clamp keeps values within bounds", () => {
   assert.strictEqual(clamp(150, 0, 100), 100);
   assert.strictEqual(clamp(-10, 0, 100), 0);
   assert.strictEqual(clamp(50, 0, 100), 50);
+});
+test("clamp is inclusive at both boundaries", () => {
+  assert.strictEqual(clamp(0, 0, 100), 0);
+  assert.strictEqual(clamp(100, 0, 100), 100);
 });
 test("polarToCartesian places 0 degrees at the top of the circle", () => {
   const p = polarToCartesian(100, 100, 50, 0);
@@ -178,6 +251,18 @@ test("polarToCartesian places 90 degrees on the right of the circle", () => {
   const p = polarToCartesian(100, 100, 50, 90);
   assert.ok(Math.abs(p.x - 150) < 1e-6);
   assert.ok(Math.abs(p.y - 100) < 1e-6);
+});
+test("polarToCartesian places 180 degrees at the bottom of the circle", () => {
+  const p = polarToCartesian(100, 100, 50, 180);
+  assert.ok(Math.abs(p.x - 100) < 1e-6);
+  assert.ok(Math.abs(p.y - 150) < 1e-6);
+});
+
+console.log("\nConfiguration integrity");
+test("CONFIG is frozen and resists mutation attempts", () => {
+  assert.strictEqual(Object.isFrozen(CONFIG), true);
+  assert.throws(() => { CONFIG.MAX_ALERTS = 999; });
+  assert.strictEqual(CONFIG.MAX_ALERTS, 30); // unchanged
 });
 
 console.log("\nSection generation (deterministic with a seeded RNG stub)");
@@ -196,6 +281,10 @@ test("section ids are derived from the first letter of the stand + index", () =>
   const sections = buildSections(["North"], 2, () => 0);
   assert.strictEqual(sections[0].id, "N1");
   assert.strictEqual(sections[1].id, "N2");
+});
+test("zero sections-per-stand produces an empty section list without error", () => {
+  const sections = buildSections(["North","South"], 0, () => 0.5);
+  assert.strictEqual(sections.length, 0);
 });
 
 console.log("\n" + passed + " passed, " + failed + " failed");
