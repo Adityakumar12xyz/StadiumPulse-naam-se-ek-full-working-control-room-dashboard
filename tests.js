@@ -1,17 +1,26 @@
 /**
  * tests.js
- * Zero-dependency unit tests for StadiumPulse's core logic functions.
- * These mirror the pure functions defined inside index.html so they can be
- * verified independently of the DOM (jsdom/browser not required).
+ * Zero-dependency unit tests for StadiumPulse's core logic.
+ * These functions are kept identical to the pure logic layer inside index.html
+ * so behaviour can be verified without a DOM (no jsdom/browser required).
  *
- * Run with:  node tests.js
+ * Run with:  node tests.js   (or  npm test)
  */
 const assert = require("assert");
 
-/* ---- functions under test (kept identical to index.html) ---- */
+/* ---------------------------------------------------------------
+ * Functions under test — mirrors index.html's pure logic layer
+ * ----------------------------------------------------------- */
+const CONFIG = {
+  DENSITY_WARN_PCT: 60,
+  DENSITY_CRITICAL_PCT: 85,
+  MAX_ALERTS: 30,
+  REPORT_MAX_LEN: 140
+};
+
 function getDensityLevel(pct){
-  if (pct >= 85) return "critical";
-  if (pct >= 60) return "warn";
+  if (pct >= CONFIG.DENSITY_CRITICAL_PCT) return "critical";
+  if (pct >= CONFIG.DENSITY_WARN_PCT) return "warn";
   return "live";
 }
 
@@ -28,11 +37,40 @@ function polarToCartesian(cx, cy, r, angleDeg){
   return { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) };
 }
 
-function validateIncidentReport(text){
+function validateIncidentReport(text, maxLen){
   const trimmed = (text || "").trim();
   if (!trimmed) return { ok:false, error:"Please describe the incident before submitting." };
-  if (trimmed.length > 140) return { ok:false, error:"Description must be 140 characters or fewer." };
+  if (trimmed.length > (maxLen || CONFIG.REPORT_MAX_LEN)){
+    return { ok:false, error:"Description must be " + (maxLen || CONFIG.REPORT_MAX_LEN) + " characters or fewer." };
+  }
   return { ok:true, value: escapeHtml(trimmed) };
+}
+
+function trimAlerts(list, max){
+  return list.length > max ? list.slice(0, max) : list;
+}
+
+function buildSections(stands, perStand, rand){
+  rand = rand || Math.random;
+  const out = [];
+  stands.forEach(function(stand){
+    for (let i = 1; i <= perStand; i++){
+      const capacity = 3000 + Math.floor(rand()*800);
+      out.push({
+        id: stand[0] + i,
+        name: stand + " " + i,
+        capacity: capacity,
+        count: Math.floor(capacity * (0.3 + rand()*0.5))
+      });
+    }
+  });
+  return out;
+}
+
+function gateStatusLevel(queue){
+  if (queue >= 25) return "critical";
+  if (queue >= 12) return "warn";
+  return "live";
 }
 
 /* ------------------------- test runner ------------------------- */
@@ -50,43 +88,79 @@ function test(name, fn){
 }
 
 console.log("Density classification");
-test("below 60% is classified as live", () => {
+test("below warn threshold is classified as live", () => {
   assert.strictEqual(getDensityLevel(0), "live");
   assert.strictEqual(getDensityLevel(59), "live");
 });
-test("60-84% is classified as warn", () => {
+test("exact warn boundary (60) flips to warn, not live", () => {
   assert.strictEqual(getDensityLevel(60), "warn");
-  assert.strictEqual(getDensityLevel(84), "warn");
 });
-test("85%+ is classified as critical", () => {
+test("59.99 stays live, 60.0 is warn (boundary is inclusive on the high side)", () => {
+  assert.strictEqual(getDensityLevel(59.99), "live");
+  assert.strictEqual(getDensityLevel(60.0), "warn");
+});
+test("exact critical boundary (85) flips to critical, not warn", () => {
+  assert.strictEqual(getDensityLevel(84), "warn");
   assert.strictEqual(getDensityLevel(85), "critical");
+});
+test("100% and beyond is still critical (no overflow class)", () => {
   assert.strictEqual(getDensityLevel(100), "critical");
+  assert.strictEqual(getDensityLevel(150), "critical");
 });
 
+console.log("\nGate queue classification");
+test("short queue is live", () => { assert.strictEqual(gateStatusLevel(0), "live"); });
+test("queue boundary at 12 is warn", () => { assert.strictEqual(gateStatusLevel(12), "warn"); });
+test("queue boundary at 25 is critical", () => { assert.strictEqual(gateStatusLevel(25), "critical"); });
+
 console.log("\nInput sanitization (XSS prevention)");
-test("escapes angle brackets and quotes", () => {
+test("escapes a script-bearing payload", () => {
   const dirty = `<img src=x onerror="alert(1)">`;
   const clean = escapeHtml(dirty);
   assert.ok(!clean.includes("<img"));
   assert.ok(clean.includes("&lt;img"));
 });
-test("escapes ampersands without double-escaping issues", () => {
+test("escapes ampersands without double-escaping", () => {
   assert.strictEqual(escapeHtml("Gate 4 & 5"), "Gate 4 &amp; 5");
+});
+test("escapes single and double quotes", () => {
+  assert.strictEqual(escapeHtml(`it's "loud"`), "it&#39;s &quot;loud&quot;");
+});
+test("leaves plain text untouched", () => {
+  assert.strictEqual(escapeHtml("Overcrowding near gate 4"), "Overcrowding near gate 4");
 });
 
 console.log("\nIncident report validation");
 test("rejects empty description", () => {
-  const r = validateIncidentReport("   ");
-  assert.strictEqual(r.ok, false);
+  assert.strictEqual(validateIncidentReport("   ").ok, false);
 });
-test("rejects description over 140 chars", () => {
-  const r = validateIncidentReport("a".repeat(141));
-  assert.strictEqual(r.ok, false);
+test("rejects description over the max length", () => {
+  assert.strictEqual(validateIncidentReport("a".repeat(141)).ok, false);
+});
+test("accepts a description exactly at the max length", () => {
+  assert.strictEqual(validateIncidentReport("a".repeat(140)).ok, true);
 });
 test("accepts and sanitizes a valid description", () => {
   const r = validateIncidentReport("Overcrowding near <Gate 4>");
   assert.strictEqual(r.ok, true);
   assert.ok(!r.value.includes("<Gate"));
+});
+test("trims surrounding whitespace before validating", () => {
+  const r = validateIncidentReport("   fire exit blocked   ");
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.value, "fire exit blocked");
+});
+
+console.log("\nAlert queue trimming");
+test("keeps list untouched when under the cap", () => {
+  const list = [1,2,3];
+  assert.deepStrictEqual(trimAlerts(list, CONFIG.MAX_ALERTS), [1,2,3]);
+});
+test("trims list down to the cap, keeping the newest (front) entries", () => {
+  const list = Array.from({length: 40}, (_, i) => i);
+  const trimmed = trimAlerts(list, CONFIG.MAX_ALERTS);
+  assert.strictEqual(trimmed.length, CONFIG.MAX_ALERTS);
+  assert.strictEqual(trimmed[0], 0);
 });
 
 console.log("\nUtility functions");
@@ -99,6 +173,29 @@ test("polarToCartesian places 0 degrees at the top of the circle", () => {
   const p = polarToCartesian(100, 100, 50, 0);
   assert.ok(Math.abs(p.x - 100) < 1e-6);
   assert.ok(Math.abs(p.y - 50) < 1e-6);
+});
+test("polarToCartesian places 90 degrees on the right of the circle", () => {
+  const p = polarToCartesian(100, 100, 50, 90);
+  assert.ok(Math.abs(p.x - 150) < 1e-6);
+  assert.ok(Math.abs(p.y - 100) < 1e-6);
+});
+
+console.log("\nSection generation (deterministic with a seeded RNG stub)");
+test("builds the expected number of sections for 4 stands x 4 blocks", () => {
+  const sections = buildSections(["North","East","South","West"], 4, () => 0.5);
+  assert.strictEqual(sections.length, 16);
+});
+test("every generated section has a positive capacity and count within it", () => {
+  const sections = buildSections(["North"], 4, () => 0.5);
+  sections.forEach(s => {
+    assert.ok(s.capacity > 0);
+    assert.ok(s.count >= 0 && s.count <= s.capacity);
+  });
+});
+test("section ids are derived from the first letter of the stand + index", () => {
+  const sections = buildSections(["North"], 2, () => 0);
+  assert.strictEqual(sections[0].id, "N1");
+  assert.strictEqual(sections[1].id, "N2");
 });
 
 console.log("\n" + passed + " passed, " + failed + " failed");
