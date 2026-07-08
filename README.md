@@ -67,27 +67,31 @@ node tests.js
 
 ## 6. Code Quality
 
+- **Modern JS throughout — zero `var`**: the entire script uses `const`/`let`, arrow functions, and destructuring where it clarifies intent. Verified programmatically, not just claimed.
 - **No magic numbers** — every threshold (density %, gate-queue thresholds, alert cap, tick interval, report length limit, rate-limit cooldown) is a named constant in a single, `Object.freeze`d `CONFIG` object.
+- **DOM references cached once at startup** (`const dom = { ... }` in `initApp`) instead of repeated `document.getElementById()` calls scattered through render/update functions.
 - **Pure logic separated from DOM code** — `getDensityLevel`, `gateStatusLevel`, `escapeHtml`, `validateIncidentReport`, `isRateLimited`, `trimAlerts`, `shouldRunOnTick`, `buildSections` all take plain arguments and return plain values, with no `document` access — which is what makes all of them independently unit-testable without a browser.
 - **JSDoc on every pure function** — parameter and return types documented inline, so the logic layer reads like a small, typed library even though the project has no build step for real TypeScript.
 - **Single responsibility per function** — rendering, simulation, and state management are all separate, small functions.
-- **No inline event handlers in markup** — all wiring via `addEventListener` inside one IIFE; nothing leaks into the global scope.
+- **No inline event handlers and no inline `style=""` attributes in markup** — all event wiring via `addEventListener` inside one IIFE, and all visual state expressed through CSS classes (`gate-status--warn`, `a11y-highlight`, etc.) rather than string-built style attributes.
 - **Fail-safe bootstrap** — the whole app initialises inside `try/catch`; a failure shows a visible, accessible error message instead of a silently broken page.
 - **`DocumentFragment` batching** everywhere a list is rendered (alerts, fixtures, gates), so each re-render touches the live DOM once instead of node-by-node.
 
 ## 7. Security
 
 Full write-up in [`SECURITY.md`](./SECURITY.md). Highlights:
-- **Zero external requests** — no Google Fonts, no CDN, nothing to compromise upstream. `connect-src 'none'` in the CSP enforces this at the browser level.
-- A real, enforced `Content-Security-Policy` including `frame-ancestors 'none'` (clickjacking protection) and `object-src 'none'`.
+- **Hash-based CSP with zero `'unsafe-inline'`** — the CSP whitelists the exact SHA-256 hash of the page's `<style>` and `<script>` blocks. Any injected byte changes the hash and the browser refuses to run it — strictly stronger than the common `'unsafe-inline'` fallback. Every static `style=""` HTML attribute was removed from the markup (moved to CSS classes) specifically to make this possible.
+- **This hardening is regression-tested**, not just asserted in prose: `tests.js` recomputes the live hash and fails the build if the CSP and the actual content ever drift apart, or if `'unsafe-inline'` is reintroduced.
+- **Zero external requests** — no Google Fonts, no CDN, nothing to compromise upstream. `connect-src 'none'` in the CSP enforces this at the browser level; a test asserts no third-party origins are referenced anywhere in the file.
+- `frame-ancestors 'none'` (clickjacking protection) and `object-src 'none'`.
 - All user-supplied text is HTML-escaped and rendered exclusively via `textContent`/`createElement`.
 - Section-id tamper check, plus **client-side rate limiting** (3s cooldown + session cap) on the incident form, both unit-tested — explicitly documented as defense-in-depth, not a substitute for server-side enforcement.
 - `Object.freeze(CONFIG)` so runtime constants can't be mutated.
-- A documented (not hand-waved) production checklist: auth, server-side re-validation, real rate limiting, audit logging, HTTPS/HSTS, nonce-based CSP.
+- A documented (not hand-waved) production checklist in `SECURITY.md`: auth, server-side re-validation, real rate limiting, audit logging, HTTPS/HSTS.
 
 ## 8. Testing
 
-`tests.js` contains **43 unit tests**, all passing, covering:
+`tests.js` contains **52 unit tests**, all passing, covering:
 - Density and gate-queue classification at and around every threshold (including the boundary itself, one below it, and overflow values)
 - XSS-prevention across multiple payload shapes, including a literal `<script>` tag and attribute-breakout via quotes
 - Incident-report validation: empty input, over-length, exactly-at-the-limit, whitespace trimming, custom length overrides
@@ -97,17 +101,19 @@ Full write-up in [`SECURITY.md`](./SECURITY.md). Highlights:
 - Geometry helpers checked at 0°/90°/180°
 - `CONFIG` immutability (frozen, mutation attempt throws, value unchanged)
 - Deterministic section generation via an injectable RNG stub, including a zero-sections edge case
+- **Build-integrity / regression checks** that read the actual `index.html`: the CSP contains no `'unsafe-inline'`, `connect-src 'none'` and `frame-ancestors 'none'` are present, the declared CSP hashes match a freshly-computed SHA-256 of the live `<style>`/`<script>` blocks, no third-party origins are referenced, no static `style=""` attributes have crept back into the markup, and expected accessibility markers (`aria-live`, `role="alert"`, `aria-pressed`, etc.) are present. These aren't logic tests — they're a safety net that fails the build if a future edit silently weakens security or accessibility.
 
-Run `npm test` — all 43 tests pass in under a second, no test framework or `npm install` required.
+Run `npm test` — all 52 tests pass in under a second, no test framework or `npm install` required.
 
 ## 9. Efficiency
 
 - **Partial DOM updates, not full re-renders**: the stadium map is built once (`buildBowlOnce`); every crowd-density tick repaints only the one `<path>` that changed (`paintSection`), instead of clearing and rebuilding all 16 segments every cycle.
 - **One consolidated timer**, not several: a single `setInterval` drives a tick counter, and clock/crowd-simulation/ticketing/gate cadences are derived from that counter via `shouldRunOnTick`.
+- **DOM lookups happen once**: every element the app touches is fetched with `getElementById` exactly once at startup into a `dom` cache object, instead of being re-queried inside render loops that run every tick.
 - **`DocumentFragment` batching** for every list re-render, minimising reflows.
-- **No external font or script requests** — nothing to wait on, nothing that can block first paint.
+- **Zero external requests of any kind** — no fonts, no CDN, nothing to wait on, nothing that can block first paint. `connect-src 'none'` in the CSP makes this a hard guarantee, not just a habit.
 - **`content-visibility: auto`** on panels off the render-critical path, letting the browser skip layout/paint work for content not currently visible.
-- **Animations are GPU-cheap** (opacity/stroke) and fully disabled under `prefers-reduced-motion`.
+- **Animations are GPU-cheap** (opacity/stroke via CSS classes, not per-frame inline style writes) and fully disabled under `prefers-reduced-motion`.
 
 ## 10. Accessibility
 

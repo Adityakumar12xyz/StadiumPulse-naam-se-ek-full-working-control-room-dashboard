@@ -8,6 +8,22 @@
  */
 "use strict";
 const assert = require("assert");
+const fs = require("fs");
+const path = require("path");
+const crypto = require("crypto");
+
+const HTML_PATH = path.join(__dirname, "index.html");
+const html = fs.existsSync(HTML_PATH) ? fs.readFileSync(HTML_PATH, "utf8") : "";
+const cspMatch = html.match(/content="(default-src[^"]*)"/);
+const csp = cspMatch ? cspMatch[1] : "";
+const styleBlockMatch = html.match(/<style>([\s\S]*?)<\/style>/);
+const scriptBlockMatch = html.match(/<script>([\s\S]*?)<\/script>/);
+const actualStyleHash = styleBlockMatch
+  ? "sha256-" + crypto.createHash("sha256").update(styleBlockMatch[1], "utf8").digest("base64")
+  : "";
+const actualScriptHash = scriptBlockMatch
+  ? "sha256-" + crypto.createHash("sha256").update(scriptBlockMatch[1], "utf8").digest("base64")
+  : "";
 
 /* ---------------------------------------------------------------
  * Functions under test — mirrors index.html's pure logic layer
@@ -285,6 +301,42 @@ test("section ids are derived from the first letter of the stand + index", () =>
 test("zero sections-per-stand produces an empty section list without error", () => {
   const sections = buildSections(["North","South"], 0, () => 0.5);
   assert.strictEqual(sections.length, 0);
+});
+
+console.log("\nBuild integrity (index.html regression checks)");
+test("index.html exists and is readable", () => {
+  assert.ok(fs.existsSync(HTML_PATH), "index.html not found next to tests.js");
+});
+test("CSP has no 'unsafe-inline' (hash-based CSP must stay hardened)", () => {
+  assert.ok(!csp.includes("unsafe-inline"));
+});
+test("CSP blocks outbound connections (connect-src 'none')", () => {
+  assert.ok(csp.includes("connect-src 'none'"));
+});
+test("CSP blocks framing (frame-ancestors 'none')", () => {
+  assert.ok(csp.includes("frame-ancestors 'none'"));
+});
+test("the declared style-src hash matches the actual <style> block content", () => {
+  assert.ok(csp.includes(actualStyleHash), "style block was edited without updating the CSP hash");
+});
+test("the declared script-src hash matches the actual <script> block content", () => {
+  assert.ok(csp.includes(actualScriptHash), "script block was edited without updating the CSP hash");
+});
+test("no external stylesheet or script origins are referenced (zero third-party requests)", () => {
+  assert.ok(!html.includes("fonts.googleapis.com"));
+  assert.ok(!html.includes("fonts.gstatic.com"));
+  assert.ok(!html.includes("cdnjs.cloudflare.com"));
+});
+test("no static inline style=\"\" attributes remain in the markup", () => {
+  // JS-driven `el.style.property = value` (CSSOM) is unaffected by CSP and is fine;
+  // this only guards against HTML-authored style="..." attributes creeping back in.
+  const bodyOnly = html.split("<script>")[0];
+  assert.ok(!/\sstyle="/.test(bodyOnly));
+});
+test("every ARIA landmark referenced in the README is actually present", () => {
+  ["aria-live", "role=\"alert\"", "aria-label", "skip-link", "aria-pressed", "aria-describedby"].forEach((marker) => {
+    assert.ok(html.includes(marker), "missing expected accessibility marker: " + marker);
+  });
 });
 
 console.log("\n" + passed + " passed, " + failed + " failed");

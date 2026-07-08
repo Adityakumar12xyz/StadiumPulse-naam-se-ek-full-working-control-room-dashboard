@@ -5,12 +5,14 @@ This file documents the security posture of the demo and what changes before a r
 ## Implemented in this build
 
 - **Zero external dependencies.** Earlier drafts loaded Google Fonts; this build uses only system fonts, so there is nothing to allow-list, nothing that can be swapped for a malicious asset by a compromised third-party CDN, and no external network request happens at all.
-- **A tight, enforced `Content-Security-Policy`** (real meta tag, not a comment):
-  `default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'`
+- **A hash-based `Content-Security-Policy` with no `'unsafe-inline'` at all** (real meta tag, not a comment):
+  `default-src 'self'; style-src 'self' 'sha256-...'; script-src 'self' 'sha256-...'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'`
+  - The `sha256-` values are the exact SHA-256 hash of the page's `<style>` and `<script>` block contents. The browser will only execute/apply that *exact* block — if a single byte were injected (e.g. via a successful XSS attempt), the hash would no longer match and the browser would refuse to run it. This is strictly stronger than `'unsafe-inline'`, which allows *any* inline script/style to run.
+  - Every static `style=""` HTML attribute was removed from the markup and replaced with CSS classes, specifically so `'unsafe-inline'` could be dropped from `style-src` entirely (attribute styles, unlike CSSOM calls like `el.style.color = ...`, do require `'unsafe-inline'`/`'unsafe-hashes'` under CSP, so removing them was a precondition for this hardening).
   - `connect-src 'none'` — the app makes no `fetch`/`XHR`/`WebSocket` calls, so none are allowed, closing off a whole class of data-exfiltration vectors even if a script injection somehow occurred.
   - `frame-ancestors 'none'` — blocks this page from being embedded in a hostile iframe (clickjacking protection).
   - `object-src 'none'` and `base-uri 'self'` — standard hardening against legacy plugin and base-tag injection tricks.
-  - `'unsafe-inline'` for style/script remains because everything intentionally ships in one HTML file for zero-install judging; see "What changes in production" below for the nonce/hash-based alternative.
+  - **This is automatically regression-tested**: `tests.js` recomputes the SHA-256 hash of the live `<style>`/`<script>` blocks and asserts the CSP still contains it, and asserts `'unsafe-inline'` never creeps back in. If someone edits the app without updating the CSP hash, `npm test` fails.
 - **`referrer` meta tag** set to `no-referrer` — no page/query data leaks anywhere, including to the (now removed) external font host.
 - **XSS prevention on the only free-text input** (incident description):
   - HTML-escaped with `escapeHtml()` before it is ever stored or displayed.
@@ -32,4 +34,4 @@ A hackathon demo has no real backend, so the items below are documented rather t
 - **Transport security**: HTTPS-only, HSTS, secure cookies if sessions are introduced.
 - **Audit logging**: every incident report and security alert attributed to an authenticated staff account, logged immutably.
 - **Dependency scanning**: if a real backend/build pipeline is introduced, run `npm audit` / Dependabot (or equivalent) in CI.
-- **Nonce- or hash-based CSP without `'unsafe-inline'`**: a production build would split CSS/JS into external files served with a per-request nonce, tightening the CSP further than a single-file demo allows.
+- **External CSS/JS files instead of inline blocks**: the hash-based CSP here is already stronger than `'unsafe-inline'`, but a production build would typically split CSS/JS into external files served with a per-request nonce so the policy doesn't need updating on every deploy (a hash must be recomputed whenever the inline content changes — acceptable for a single-file hackathon demo, less ideal for a fast-moving production codebase).

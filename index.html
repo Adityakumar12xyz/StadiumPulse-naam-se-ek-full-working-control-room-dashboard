@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'sha256-izIDk3qkogEcdY470Q0clTp+MvdO8l9vs+3x2mvfJ8s='; script-src 'self' 'sha256-gVuJOdq/DRDpEOsrTIoM4qfXKJ6i1LikPfNMLW/YABw='; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="dark">
 <title>StadiumPulse — Smart Stadium &amp; Tournament Operations</title>
@@ -110,14 +110,18 @@
   }
   .panel-head{display:flex; align-items:baseline; justify-content:space-between; gap:.5rem;}
   .panel-head h2{font-size:1rem;}
-  .eyebrow{font-size:.68rem; text-transform:uppercase; letter-spacing:.12em; color:var(--text-secondary);}
+  .eyebrow{font-size:.68rem; text-transform:uppercase; letter-spacing:.12em; color:var(--text-secondary); margin:0;}
 
   .bowl-wrap{display:flex; flex-direction:column; align-items:center; gap:.75rem;}
   svg#bowl{width:100%; max-width:460px; height:auto;}
   .bowl-seg{stroke:var(--bg-primary); stroke-width:2; cursor:pointer; transition:opacity .15s, fill .3s;}
   .bowl-seg:hover, .bowl-seg:focus-visible{opacity:.75;}
+  .bowl-seg.a11y-highlight{stroke:var(--accent-info); stroke-width:5;}
   .bowl-legend{display:flex; gap:1rem; flex-wrap:wrap; justify-content:center; font-size:.75rem; color:var(--text-secondary);}
   .legend-dot{width:9px;height:9px;border-radius:2px;display:inline-block;margin-right:.35rem;}
+  .legend-dot--live{background:var(--accent-live);}
+  .legend-dot--warn{background:var(--accent-warn);}
+  .legend-dot--critical{background:var(--accent-critical);}
   #sectionTooltip{
     font-size:.85rem; color:var(--text-primary); background:var(--bg-panel-raised); border:1px solid var(--line);
     border-radius:8px; padding:.6rem .8rem; min-height:1.4em; width:100%; text-align:center;
@@ -144,6 +148,8 @@
     padding:.5rem .6rem; border-radius:6px; font-size:.85rem; width:100%;
   }
   .report-form .row{display:flex; gap:.6rem;}
+  .report-form .row > .col-1{flex:1;}
+  .report-form .row > .col-2{flex:2;}
   .char-count{font-size:.7rem; color:var(--text-secondary); text-align:right;}
   .btn{
     background:var(--accent-info); color:#03131a; border:none; padding:.55rem .9rem; border-radius:6px;
@@ -169,6 +175,10 @@
   .gate-card{background:var(--bg-panel-raised); border:1px solid var(--line); border-radius:8px; padding:.6rem .7rem; font-size:.78rem;}
   .gate-card .gate-name{font-weight:600; margin-bottom:.3rem;}
   .gate-status{display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:.35rem;}
+  .gate-status--live{background:var(--accent-live);}
+  .gate-status--warn{background:var(--accent-warn);}
+  .gate-status--critical{background:var(--accent-critical);}
+  .gate-staff{color:var(--text-secondary);}
 
   .toolbar{
     grid-column:1 / -1; display:flex; flex-wrap:wrap; gap:.8rem; align-items:center;
@@ -201,6 +211,8 @@
     display:none; max-width:1400px; margin:1rem auto; padding:1rem 1.25rem; background:var(--accent-critical-soft);
     border:1px solid var(--accent-critical); color:var(--accent-critical); border-radius:8px;
   }
+  .total-occupancy{color:var(--text-secondary); font-size:.85rem;}
+  .stack-col{display:flex; flex-direction:column; gap:1.25rem;}
 </style>
 </head>
 <body>
@@ -232,20 +244,20 @@
         <p class="eyebrow">Live occupancy</p>
         <h2 id="bowlHeading">Stadium Bowl — 16 sections</h2>
       </div>
-      <span class="mono" id="totalOccupancy" style="color:var(--text-secondary);font-size:.85rem;"></span>
+      <span class="mono total-occupancy" id="totalOccupancy"></span>
     </div>
     <div class="bowl-wrap">
       <svg id="bowl" viewBox="0 0 400 400" role="img" aria-label="Stadium seating map showing live crowd density per section"></svg>
       <div id="sectionTooltip" aria-live="polite">Hover or focus a section to see its live occupancy.</div>
       <div class="bowl-legend">
-        <span><span class="legend-dot" style="background:var(--accent-live)"></span>Low (&lt;60%)</span>
-        <span><span class="legend-dot" style="background:var(--accent-warn)"></span>Busy (60–85%)</span>
-        <span><span class="legend-dot" style="background:var(--accent-critical)"></span>Critical (&gt;85%)</span>
+        <span><span class="legend-dot legend-dot--live"></span>Low (&lt;60%)</span>
+        <span><span class="legend-dot legend-dot--warn"></span>Busy (60–85%)</span>
+        <span><span class="legend-dot legend-dot--critical"></span>Critical (&gt;85%)</span>
       </div>
     </div>
   </section>
 
-  <div style="display:flex;flex-direction:column;gap:1.25rem;">
+  <div class="stack-col">
     <section class="panel" aria-labelledby="alertsHeading">
       <div class="panel-head">
         <div>
@@ -256,13 +268,13 @@
       <ul class="alert-feed" id="alertFeed" aria-live="polite"></ul>
 
       <form class="report-form" id="reportForm" novalidate autocomplete="off">
-        <p class="eyebrow" style="margin:0;">Report an incident</p>
+        <p class="eyebrow">Report an incident</p>
         <div class="row">
-          <div style="flex:1;">
+          <div class="col-1">
             <label for="reportSection">Section</label>
             <select id="reportSection" required></select>
           </div>
-          <div style="flex:2;">
+          <div class="col-2">
             <label for="reportDesc">Description</label>
             <input id="reportDesc" type="text" maxlength="140" placeholder="e.g. Overcrowding near gate 4" required aria-describedby="charCount">
           </div>
@@ -330,7 +342,7 @@
    * can't be mutated at runtime by accident or by a bad actor
    * poking at the global scope.
    * ======================================================= */
-  var CONFIG = Object.freeze({
+  const CONFIG = Object.freeze({
     DENSITY_WARN_PCT: 60,
     DENSITY_CRITICAL_PCT: 85,
     GATE_WARN_QUEUE: 12,
@@ -381,9 +393,9 @@
    *  @param {*} str
    *  @returns {string} */
   function escapeHtml(str){
-    return String(str).replace(/[&<>"']/g, function(c){
-      return ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"})[c];
-    });
+    return String(str).replace(/[&<>"']/g, (c) => (
+      { "&":"&amp;", "<":"&lt;", ">":"&gt;", "\"":"&quot;", "'":"&#39;" }[c]
+    ));
   }
 
   /** @param {number} n @param {number} min @param {number} max @returns {number} */
@@ -394,8 +406,8 @@
    *  @param {number} [maxLen]
    *  @returns {{ok:true,value:string}|{ok:false,error:string}} */
   function validateIncidentReport(text, maxLen){
-    var limit = maxLen || CONFIG.REPORT_MAX_LEN;
-    var trimmed = (text || "").trim();
+    const limit = maxLen || CONFIG.REPORT_MAX_LEN;
+    const trimmed = (text || "").trim();
     if (!trimmed) return { ok:false, error:"Please describe the incident before submitting." };
     if (trimmed.length > limit){
       return { ok:false, error:"Description must be " + limit + " characters or fewer." };
@@ -427,17 +439,17 @@
   /** @param {number} cx @param {number} cy @param {number} r @param {number} angleDeg
    *  @returns {{x:number,y:number}} */
   function polarToCartesian(cx, cy, r, angleDeg){
-    var a = (angleDeg - 90) * Math.PI / 180;
+    const a = (angleDeg - 90) * Math.PI / 180;
     return { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) };
   }
 
   /** Builds an SVG path `d` string for one donut-chart segment. */
   function describeDonutSegment(cx, cy, rOuter, rInner, startAngle, endAngle){
-    var p1 = polarToCartesian(cx, cy, rOuter, endAngle);
-    var p2 = polarToCartesian(cx, cy, rOuter, startAngle);
-    var p3 = polarToCartesian(cx, cy, rInner, startAngle);
-    var p4 = polarToCartesian(cx, cy, rInner, endAngle);
-    var largeArc = endAngle - startAngle <= 180 ? 0 : 1;
+    const p1 = polarToCartesian(cx, cy, rOuter, endAngle);
+    const p2 = polarToCartesian(cx, cy, rOuter, startAngle);
+    const p3 = polarToCartesian(cx, cy, rInner, startAngle);
+    const p4 = polarToCartesian(cx, cy, rInner, endAngle);
+    const largeArc = endAngle - startAngle <= 180 ? 0 : 1;
     return ["M", p1.x, p1.y, "A", rOuter, rOuter, 0, largeArc, 0, p2.x, p2.y,
             "L", p3.x, p3.y, "A", rInner, rInner, 0, largeArc, 1, p4.x, p4.y, "Z"].join(" ");
   }
@@ -447,16 +459,16 @@
    *  @param {string[]} stands @param {number} perStand @param {() => number} [rand]
    *  @returns {Array<{id:string,name:string,capacity:number,count:number}>} */
   function buildSections(stands, perStand, rand){
-    rand = rand || Math.random;
-    var out = [];
-    stands.forEach(function(stand){
-      for (var i = 1; i <= perStand; i++){
-        var capacity = 3000 + Math.floor(rand()*800);
+    const r = rand || Math.random;
+    const out = [];
+    stands.forEach((stand) => {
+      for (let i = 1; i <= perStand; i++){
+        const capacity = 3000 + Math.floor(r()*800);
         out.push({
           id: stand[0] + i,
           name: stand + " " + i,
           capacity: capacity,
-          count: Math.floor(capacity * (0.3 + rand()*0.5))
+          count: Math.floor(capacity * (0.3 + r()*0.5))
         });
       }
     });
@@ -470,271 +482,288 @@
   try{
     initApp();
   } catch(err){
-    var box = document.getElementById("appError");
+    const box = document.getElementById("appError");
     box.style.display = "block";
     box.textContent = "StadiumPulse failed to start (" + err.message + "). Please reload the page.";
     if (window.console) console.error(err);
   }
 
   function initApp(){
-    var sections = buildSections(CONFIG.STANDS, CONFIG.SECTIONS_PER_STAND);
-    var fixtures = [
+    const sections = buildSections(CONFIG.STANDS, CONFIG.SECTIONS_PER_STAND);
+    const fixtures = [
       { name:"Falcons vs Titans — Semifinal", date:"08 Jul, 19:30", gate:"Gate 2", sold:92 },
       { name:"Ravens vs Hawks — Semifinal", date:"09 Jul, 19:30", gate:"Gate 4", sold:78 },
       { name:"Grand Final", date:"12 Jul, 18:00", gate:"All Gates", sold:64 }
     ];
-    var gates = CONFIG.GATES.map(function(name){
-      return { name:name, queue: Math.floor(Math.random()*20), staff: 2 + Math.floor(Math.random()*4) };
-    });
-    var weatherStates = [
+    const gates = CONFIG.GATES.map((name) => (
+      { name, queue: Math.floor(Math.random()*20), staff: 2 + Math.floor(Math.random()*4) }
+    ));
+    const weatherStates = [
       { icon:"☀", label:"Clear", temp:29, advisory:"Ideal conditions." },
       { icon:"⛅", label:"Partly cloudy", temp:27, advisory:"No action needed." },
       { icon:"🌧", label:"Light rain", temp:22, advisory:"Advise covered concourse routing." }
     ];
 
-    var alertIdCounter = 0;
-    var alerts = [];
-    var lastReportAt = null;
-    var reportsThisSession = 0;
+    let alertIdCounter = 0;
+    let alerts = [];
+    let lastReportAt = null;
+    let reportsThisSession = 0;
 
-    var svg = document.getElementById("bowl");
-    var NS = "http://www.w3.org/2000/svg";
-    var cx = 200, cy = 200, rOuter = 190, rInner = 110;
-    var segAngle = 360 / sections.length;
-    var sectionEls = []; // cached refs for O(1) partial updates, avoids full-SVG rebuilds
+    // Cache every DOM reference exactly once at startup instead of
+    // repeating document.getElementById() inside hot render/update paths.
+    const dom = {
+      appError: document.getElementById("appError"),
+      clock: document.getElementById("clock"),
+      weatherPill: document.getElementById("weatherPill"),
+      bowl: document.getElementById("bowl"),
+      totalOccupancy: document.getElementById("totalOccupancy"),
+      sectionTooltip: document.getElementById("sectionTooltip"),
+      alertFeed: document.getElementById("alertFeed"),
+      ticketStats: document.getElementById("ticketStats"),
+      ticketTable: document.getElementById("ticketTable"),
+      gateGrid: document.getElementById("gateGrid"),
+      reportForm: document.getElementById("reportForm"),
+      reportSection: document.getElementById("reportSection"),
+      reportDesc: document.getElementById("reportDesc"),
+      charCount: document.getElementById("charCount"),
+      reportSubmit: document.getElementById("reportSubmit"),
+      reportError: document.getElementById("reportError"),
+      reportHint: document.getElementById("reportHint"),
+      toggleContrast: document.getElementById("toggleContrast"),
+      toggleLargeText: document.getElementById("toggleLargeText"),
+      toggleCaptions: document.getElementById("toggleCaptions"),
+      toggleAudio: document.getElementById("toggleAudio"),
+      captionTicker: document.getElementById("captionTicker"),
+      wheelchairBtn: document.getElementById("wheelchairBtn")
+    };
+
+    const NS = "http://www.w3.org/2000/svg";
+    const cx = 200, cy = 200, rOuter = 190, rInner = 110;
+    const segAngle = 360 / sections.length;
+    const sectionEls = []; // cached refs for O(1) partial updates, avoids full-SVG rebuilds
 
     function buildBowlOnce(){
-      svg.innerHTML = "";
-      sections.forEach(function(sec, i){
-        var start = i * segAngle + 2;
-        var end = (i+1) * segAngle - 2;
-        var path = document.createElementNS(NS, "path");
+      dom.bowl.innerHTML = "";
+      sections.forEach((sec, i) => {
+        const start = i * segAngle + 2;
+        const end = (i+1) * segAngle - 2;
+        const path = document.createElementNS(NS, "path");
         path.setAttribute("d", describeDonutSegment(cx, cy, rOuter, rInner, start, end));
         path.setAttribute("class", "bowl-seg");
         path.setAttribute("tabindex", "0");
         path.setAttribute("role", "button");
-        var announce = function(){ showSectionDetail(sec, path); };
+        const announce = () => showSectionDetail(sec, path);
         path.addEventListener("mouseenter", announce);
         path.addEventListener("focus", announce);
-        svg.appendChild(path);
+        dom.bowl.appendChild(path);
         sectionEls.push(path);
         paintSection(sec, path);
       });
-      var pitch = document.createElementNS(NS, "ellipse");
+      const pitch = document.createElementNS(NS, "ellipse");
       pitch.setAttribute("cx", cx); pitch.setAttribute("cy", cy);
       pitch.setAttribute("rx", rInner-14); pitch.setAttribute("ry", rInner-14);
       pitch.setAttribute("fill", "#123321"); pitch.setAttribute("stroke", "#2E7D5B"); pitch.setAttribute("stroke-width","2");
-      svg.appendChild(pitch);
-      var label = document.createElementNS(NS, "text");
+      dom.bowl.appendChild(pitch);
+      const label = document.createElementNS(NS, "text");
       label.setAttribute("x", cx); label.setAttribute("y", cy);
       label.setAttribute("text-anchor","middle"); label.setAttribute("dominant-baseline","middle");
       label.setAttribute("fill", "#F5F7FA"); label.setAttribute("font-size","13"); label.setAttribute("font-family","var(--font-display)");
       label.textContent = "SEMIFINAL";
-      svg.appendChild(label);
+      dom.bowl.appendChild(label);
       updateTotalOccupancy();
     }
 
     function paintSection(sec, path){
-      var pct = clamp(Math.round((sec.count / sec.capacity) * 100), 0, 100);
-      var level = getDensityLevel(pct);
+      const pct = clamp(Math.round((sec.count / sec.capacity) * 100), 0, 100);
+      const level = getDensityLevel(pct);
       path.setAttribute("fill", densityColorVar(level));
       path.setAttribute("aria-label", sec.name + ": " + pct + " percent full, " + level + " density");
       path.dataset.pct = String(pct);
       path.dataset.level = level;
     }
     function showSectionDetail(sec, path){
-      var pct = path.dataset.pct, level = path.dataset.level;
-      document.getElementById("sectionTooltip").textContent =
+      const { pct, level } = path.dataset;
+      dom.sectionTooltip.textContent =
         sec.name + " — " + sec.count.toLocaleString() + " / " + sec.capacity.toLocaleString() +
         " (" + pct + "% · " + String(level).toUpperCase() + ")";
     }
     function updateTotalOccupancy(){
-      var total = sections.reduce(function(a,s){return a+s.count;}, 0);
-      var cap = sections.reduce(function(a,s){return a+s.capacity;}, 0);
-      document.getElementById("totalOccupancy").textContent =
+      const total = sections.reduce((a,s) => a+s.count, 0);
+      const cap = sections.reduce((a,s) => a+s.capacity, 0);
+      dom.totalOccupancy.textContent =
         total.toLocaleString() + " / " + cap.toLocaleString() + " (" + Math.round(total/cap*100) + "%)";
     }
 
-    function pushAlert(sevLevel, text, opts){
-      opts = opts || {};
+    function pushAlert(sevLevel, text, opts = {}){
       alertIdCounter++;
-      alerts.unshift({ id: alertIdCounter, sev: sevLevel, text: text, time: new Date() });
+      alerts.unshift({ id: alertIdCounter, sev: sevLevel, text, time: new Date() });
       alerts = trimAlerts(alerts, CONFIG.MAX_ALERTS);
       renderAlerts();
-      if (opts.speak !== false && document.getElementById("toggleAudio").checked &&
+      if (opts.speak !== false && dom.toggleAudio.checked &&
           (sevLevel === "critical" || sevLevel === "high")){
         speak(text);
       }
     }
     function renderAlerts(){
-      var feed = document.getElementById("alertFeed");
-      feed.innerHTML = "";
-      var frag = document.createDocumentFragment();
-      alerts.slice(0, CONFIG.ALERTS_SHOWN).forEach(function(a){
-        var li = document.createElement("li");
+      dom.alertFeed.innerHTML = "";
+      const frag = document.createDocumentFragment();
+      alerts.slice(0, CONFIG.ALERTS_SHOWN).forEach((a) => {
+        const li = document.createElement("li");
         li.className = "alert-item";
-        var sevClass = a.sev === "critical" ? "sev-critical" : a.sev === "high" ? "sev-high" : "sev-info";
-        var badge = document.createElement("span");
+        const sevClass = a.sev === "critical" ? "sev-critical" : a.sev === "high" ? "sev-high" : "sev-info";
+        const badge = document.createElement("span");
         badge.className = "sev-badge " + sevClass;
         badge.textContent = a.sev;
-        var body = document.createElement("div");
-        var p = document.createElement("div");
+        const body = document.createElement("div");
+        const p = document.createElement("div");
         p.textContent = a.text;
-        var time = document.createElement("div");
+        const time = document.createElement("div");
         time.className = "alert-time mono";
         time.textContent = a.time.toLocaleTimeString('en-GB', {hour12:false});
         body.appendChild(p); body.appendChild(time);
         li.appendChild(badge); li.appendChild(body);
         frag.appendChild(li);
       });
-      feed.appendChild(frag);
+      dom.alertFeed.appendChild(frag);
     }
     function speak(text){
       if (!("speechSynthesis" in window)) return;
       try{
-        var u = new SpeechSynthesisUtterance(text);
+        const u = new SpeechSynthesisUtterance(text);
         u.rate = 1; u.pitch = 1;
         window.speechSynthesis.speak(u);
       }catch(e){ /* non-critical enhancement, fail silently */ }
     }
 
     function renderTicketing(){
-      var stats = document.getElementById("ticketStats");
-      var avgSold = Math.round(fixtures.reduce(function(a,f){return a+f.sold;},0)/fixtures.length);
-      stats.innerHTML = "";
+      const avgSold = Math.round(fixtures.reduce((a,f) => a+f.sold, 0)/fixtures.length);
+      dom.ticketStats.innerHTML = "";
+      const statFrag = document.createDocumentFragment();
       [
         { num: fixtures.length, lbl: "Upcoming fixtures" },
         { num: avgSold + "%", lbl: "Avg. tickets sold" },
         { num: alerts.length, lbl: "Alerts today" }
-      ].forEach(function(s){
-        var div = document.createElement("div");
+      ].forEach((s) => {
+        const div = document.createElement("div");
         div.className = "stat";
-        var numDiv = document.createElement("div"); numDiv.className = "num mono"; numDiv.textContent = s.num;
-        var lblDiv = document.createElement("div"); lblDiv.className = "lbl"; lblDiv.textContent = s.lbl;
+        const numDiv = document.createElement("div"); numDiv.className = "num mono"; numDiv.textContent = s.num;
+        const lblDiv = document.createElement("div"); lblDiv.className = "lbl"; lblDiv.textContent = s.lbl;
         div.appendChild(numDiv); div.appendChild(lblDiv);
-        stats.appendChild(div);
+        statFrag.appendChild(div);
       });
+      dom.ticketStats.appendChild(statFrag);
 
-      var tbody = document.getElementById("ticketTable");
-      tbody.innerHTML = "";
-      var frag = document.createDocumentFragment();
-      fixtures.forEach(function(f){
-        var tr = document.createElement("tr");
-        var tdName = document.createElement("td"); tdName.textContent = f.name;
-        var tdDate = document.createElement("td"); tdDate.textContent = f.date; tdDate.className="mono";
-        var tdGate = document.createElement("td"); tdGate.textContent = f.gate;
-        var tdSold = document.createElement("td");
-        var bar = document.createElement("div"); bar.className = "fill-bar";
-        var span = document.createElement("span"); span.style.width = f.sold + "%";
+      dom.ticketTable.innerHTML = "";
+      const rowFrag = document.createDocumentFragment();
+      fixtures.forEach((f) => {
+        const tr = document.createElement("tr");
+        const tdName = document.createElement("td"); tdName.textContent = f.name;
+        const tdDate = document.createElement("td"); tdDate.textContent = f.date; tdDate.className="mono";
+        const tdGate = document.createElement("td"); tdGate.textContent = f.gate;
+        const tdSold = document.createElement("td");
+        const bar = document.createElement("div"); bar.className = "fill-bar";
+        const span = document.createElement("span"); span.style.width = f.sold + "%";
         bar.appendChild(span);
         tdSold.appendChild(bar);
         tdSold.appendChild(document.createTextNode(" " + f.sold + "%"));
         tr.appendChild(tdName); tr.appendChild(tdDate); tr.appendChild(tdGate); tr.appendChild(tdSold);
-        frag.appendChild(tr);
+        rowFrag.appendChild(tr);
       });
-      tbody.appendChild(frag);
+      dom.ticketTable.appendChild(rowFrag);
     }
 
     function renderGates(){
-      var grid = document.getElementById("gateGrid");
-      grid.innerHTML = "";
-      var frag = document.createDocumentFragment();
-      gates.forEach(function(g){
-        var level = gateStatusLevel(g.queue);
-        var card = document.createElement("div");
+      dom.gateGrid.innerHTML = "";
+      const frag = document.createDocumentFragment();
+      gates.forEach((g) => {
+        const level = gateStatusLevel(g.queue);
+        const card = document.createElement("div");
         card.className = "gate-card";
-        var nameEl = document.createElement("div"); nameEl.className = "gate-name"; nameEl.textContent = g.name;
-        var statusEl = document.createElement("div");
-        var dot = document.createElement("span"); dot.className = "gate-status";
-        dot.style.background = densityColorVar(level);
+        const nameEl = document.createElement("div"); nameEl.className = "gate-name"; nameEl.textContent = g.name;
+        const statusEl = document.createElement("div");
+        const dot = document.createElement("span");
+        dot.className = "gate-status gate-status--" + level;
         statusEl.appendChild(dot);
         statusEl.appendChild(document.createTextNode(g.queue + " min queue"));
-        var staffEl = document.createElement("div");
-        staffEl.style.color = "var(--text-secondary)";
+        const staffEl = document.createElement("div");
+        staffEl.className = "gate-staff";
         staffEl.textContent = g.staff + " staff on duty";
         card.appendChild(nameEl); card.appendChild(statusEl); card.appendChild(staffEl);
         frag.appendChild(card);
       });
-      grid.appendChild(frag);
+      dom.gateGrid.appendChild(frag);
     }
 
     /* ---- Incident report form: validated, sanitized, tamper-checked, rate-limited ---- */
-    var reportSectionEl = document.getElementById("reportSection");
-    sections.forEach(function(sec){
-      var opt = document.createElement("option");
+    sections.forEach((sec) => {
+      const opt = document.createElement("option");
       opt.value = sec.id; opt.textContent = sec.name;
-      reportSectionEl.appendChild(opt);
+      dom.reportSection.appendChild(opt);
     });
-    var descEl = document.getElementById("reportDesc");
-    var charCountEl = document.getElementById("charCount");
-    var submitBtn = document.getElementById("reportSubmit");
-    var hintEl = document.getElementById("reportHint");
-    descEl.addEventListener("input", function(){
-      charCountEl.textContent = descEl.value.length + " / " + CONFIG.REPORT_MAX_LEN;
+    dom.reportDesc.addEventListener("input", () => {
+      dom.charCount.textContent = dom.reportDesc.value.length + " / " + CONFIG.REPORT_MAX_LEN;
     });
 
-    document.getElementById("reportForm").addEventListener("submit", function(e){
+    dom.reportForm.addEventListener("submit", (e) => {
       e.preventDefault();
-      var errEl = document.getElementById("reportError");
-      var now = Date.now();
+      const now = Date.now();
 
       if (isRateLimited(lastReportAt, now, CONFIG.REPORT_COOLDOWN_MS)){
-        errEl.textContent = "Please wait a moment before submitting another report.";
+        dom.reportError.textContent = "Please wait a moment before submitting another report.";
         return;
       }
       if (reportsThisSession >= CONFIG.MAX_REPORTS_PER_SESSION){
-        errEl.textContent = "Report limit reached for this session. Contact the control room directly.";
-        submitBtn.disabled = true;
+        dom.reportError.textContent = "Report limit reached for this session. Contact the control room directly.";
+        dom.reportSubmit.disabled = true;
         return;
       }
-      var result = validateIncidentReport(descEl.value, CONFIG.REPORT_MAX_LEN);
-      if (!result.ok){ errEl.textContent = result.error; return; }
+      const result = validateIncidentReport(dom.reportDesc.value, CONFIG.REPORT_MAX_LEN);
+      if (!result.ok){ dom.reportError.textContent = result.error; return; }
 
       // Defence-in-depth: confirm the submitted section id is one we actually
       // issued, rejecting a devtools-tampered <option value>.
-      var validIds = sections.map(function(s){ return s.id; });
-      if (validIds.indexOf(reportSectionEl.value) === -1){
-        errEl.textContent = "Invalid section selected.";
+      const validIds = sections.map((s) => s.id);
+      if (!validIds.includes(dom.reportSection.value)){
+        dom.reportError.textContent = "Invalid section selected.";
         return;
       }
 
-      errEl.textContent = "";
-      var sectionName = escapeHtml(reportSectionEl.options[reportSectionEl.selectedIndex].textContent);
+      dom.reportError.textContent = "";
+      const sectionName = escapeHtml(dom.reportSection.options[dom.reportSection.selectedIndex].textContent);
       pushAlert("high", "Reported at " + sectionName + ": " + result.value, { speak:true });
-      descEl.value = "";
-      charCountEl.textContent = "0 / " + CONFIG.REPORT_MAX_LEN;
+      dom.reportDesc.value = "";
+      dom.charCount.textContent = "0 / " + CONFIG.REPORT_MAX_LEN;
       lastReportAt = now;
       reportsThisSession++;
 
-      submitBtn.disabled = true;
-      var remaining = CONFIG.REPORT_COOLDOWN_MS / 1000;
-      hintEl.textContent = "Report received. You can submit again in " + remaining + "s.";
-      var countdown = setInterval(function(){
+      dom.reportSubmit.disabled = true;
+      let remaining = CONFIG.REPORT_COOLDOWN_MS / 1000;
+      dom.reportHint.textContent = "Report received. You can submit again in " + remaining + "s.";
+      const countdown = setInterval(() => {
         remaining -= 1;
         if (remaining <= 0){
           clearInterval(countdown);
-          submitBtn.disabled = false;
-          hintEl.textContent = "";
+          dom.reportSubmit.disabled = false;
+          dom.reportHint.textContent = "";
         } else {
-          hintEl.textContent = "Report received. You can submit again in " + remaining + "s.";
+          dom.reportHint.textContent = "Report received. You can submit again in " + remaining + "s.";
         }
       }, 1000);
     });
 
     /* ---- Accessibility toggles ---- */
-    document.getElementById("toggleContrast").addEventListener("change", function(e){
+    dom.toggleContrast.addEventListener("change", (e) => {
       document.body.classList.toggle("high-contrast", e.target.checked);
     });
-    document.getElementById("toggleLargeText").addEventListener("change", function(e){
+    dom.toggleLargeText.addEventListener("change", (e) => {
       document.documentElement.style.setProperty("--font-scale", e.target.checked ? "1.25" : "1");
     });
-    document.getElementById("toggleCaptions").addEventListener("change", function(e){
-      var ticker = document.getElementById("captionTicker");
-      ticker.classList.toggle("active", e.target.checked);
+    dom.toggleCaptions.addEventListener("change", (e) => {
+      dom.captionTicker.classList.toggle("active", e.target.checked);
       if (e.target.checked){ startCaptions(); } else { stopCaptions(); }
     });
-    var captionTimer = null;
-    var captionLines = [
+    let captionTimer = null;
+    const captionLines = [
       "[Commentary] Kickoff — both sides settling into shape.",
       "[Commentary] Chance on the left wing, cleared by the defense.",
       "[Announcement] Please keep aisles clear near Gate 4.",
@@ -742,41 +771,39 @@
       "[Announcement] Water stations open at all concourse levels."
     ];
     function startCaptions(){
-      var i = 0;
-      var ticker = document.getElementById("captionTicker");
-      ticker.textContent = captionLines[0];
-      captionTimer = setInterval(function(){
+      let i = 0;
+      dom.captionTicker.textContent = captionLines[0];
+      captionTimer = setInterval(() => {
         i = (i+1) % captionLines.length;
-        ticker.textContent = captionLines[i];
+        dom.captionTicker.textContent = captionLines[i];
       }, 4000);
     }
     function stopCaptions(){ clearInterval(captionTimer); }
 
-    document.getElementById("wheelchairBtn").addEventListener("click", function(){
-      var pressed = this.getAttribute("aria-pressed") === "true";
+    dom.wheelchairBtn.addEventListener("click", function(){
+      const pressed = this.getAttribute("aria-pressed") === "true";
       this.setAttribute("aria-pressed", String(!pressed));
-      sectionEls.forEach(function(el, idx){
+      sectionEls.forEach((el, idx) => {
         if (sections[idx].name.endsWith("1")){
-          el.style.stroke = !pressed ? "var(--accent-info)" : "var(--bg-primary)";
-          el.style.strokeWidth = !pressed ? "5" : "2";
+          el.classList.toggle("a11y-highlight", !pressed);
         }
       });
     });
 
     /* ---- Single consolidated timer loop (efficiency: one interval, not several) ---- */
-    var tick = 0;
+    let tick = 0;
     function tickClock(){
-      document.getElementById("clock").textContent = new Date().toLocaleTimeString('en-GB', {hour12:false});
+      dom.clock.textContent = new Date().toLocaleTimeString('en-GB', {hour12:false});
     }
     function simulateCrowd(){
-      var idx = Math.floor(Math.random()*sections.length);
-      var sec = sections[idx];
-      var delta = Math.floor((Math.random()-0.4) * sec.capacity * 0.06);
+      const idx = Math.floor(Math.random()*sections.length);
+      const sec = sections[idx];
+      const delta = Math.floor((Math.random()-0.4) * sec.capacity * 0.06);
       sec.count = clamp(sec.count + delta, 0, sec.capacity);
       paintSection(sec, sectionEls[idx]); // update only the changed segment, not the whole SVG
       updateTotalOccupancy();
-      var pct = Math.round((sec.count/sec.capacity)*100);
-      var level = getDensityLevel(pct);
+      const pct = Math.round((sec.count/sec.capacity)*100);
+      const level = getDensityLevel(pct);
       if (level === "critical" && Math.random() < 0.6){
         pushAlert("critical", sec.name + " has reached " + pct + "% capacity — consider entry throttling.");
       } else if (Math.random() < 0.08){
@@ -784,15 +811,15 @@
       }
     }
     function simulateGates(){
-      gates.forEach(function(g){
+      gates.forEach((g) => {
         g.queue = clamp(g.queue + Math.floor((Math.random()-0.5)*6), 0, 40);
       });
       renderGates();
     }
     function simulateWeather(){
       if (Math.random() < 0.15){
-        var w = weatherStates[Math.floor(Math.random()*weatherStates.length)];
-        document.getElementById("weatherPill").textContent = w.icon + " " + w.temp + "°C · " + w.label;
+        const w = weatherStates[Math.floor(Math.random()*weatherStates.length)];
+        dom.weatherPill.textContent = w.icon + " " + w.temp + "°C · " + w.label;
         if (w.label !== "Clear"){ pushAlert("info", "Weather advisory: " + w.label + ". " + w.advisory); }
       }
     }
